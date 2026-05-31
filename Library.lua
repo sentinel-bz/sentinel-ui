@@ -711,30 +711,38 @@ function Funcs:AddLabel(info, doesWrap)
 	end
 	info = Library:Validate(info, { Text = "Label", DoesWrap = false, Visible = true })
 
-	local Holder = New("TextLabel", {
+	-- full-width row so addons dock at the far right like a toggle; the text label sizes to its
+	-- glyphs so the tooltip hover region ends with the text (not the whole row)
+	local Holder = New("Frame", {
 		Parent = self.Container,
 		Name = "Label",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 12),
+		AutomaticSize = info.DoesWrap and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
+		Visible = info.Visible,
+	})
+	local TextLabel = New("TextLabel", {
+		Parent = Holder,
 		Text = info.Text,
 		TextColor3 = "DimColor",
 		TextStrokeTransparency = 0.5,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 12),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = info.DoesWrap and UDim2.new(1, 0, 0, 12) or UDim2.fromOffset(0, 12),
+		AutomaticSize = info.DoesWrap and Enum.AutomaticSize.Y or Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = info.DoesWrap,
-		Visible = info.Visible,
 	})
 
-	local Label = { Text = info.Text, Type = "Label", TextLabel = Holder, AddonContainer = nil }
+	local Label = { Text = info.Text, Type = "Label", TextLabel = TextLabel, AddonContainer = nil }
 
-	-- addons sit in a right-aligned strip, matching the dump's RightContainer
+	-- fixed-height right strip (not fromScale, to avoid a circular size chain with the addon)
 	local Right = New("Frame", {
 		Parent = Holder,
 		Name = "RightContainer",
 		BackgroundTransparency = 1,
 		Position = UDim2.new(1, 0, 0, 1),
-		Size = UDim2.fromScale(0, 1),
+		Size = UDim2.fromOffset(0, 12),
 	})
 	New("UIListLayout", {
 		Parent = Right,
@@ -747,13 +755,13 @@ function Funcs:AddLabel(info, doesWrap)
 
 	function Label:SetText(text)
 		Label.Text = text
-		Holder.Text = text
+		TextLabel.Text = text
 	end
 	function Label:SetVisible(v)
 		Holder.Visible = v
 	end
 
-	applyTooltip(Label, info, Holder)
+	applyTooltip(Label, info, TextLabel)
 	setmetatable(Label, { __index = BaseAddons })
 	return Label
 end
