@@ -1,7 +1,6 @@
---// Sentinel usage example — demonstrates every component type.
---// Point the URL at wherever Library.lua is hosted, or require it locally.
+--// sentinel ui usage example - should show every component
 
--- Re-execution guard: kill any prior instance before re-running.
+-- execute guard
 if getgenv().Library and getgenv().Library.Unload then
 	pcall(function()
 		getgenv().Library:Unload()
@@ -22,7 +21,7 @@ local Aimbot = Window:AddTab("Aimbot")
 local Visuals = Window:AddTab("Visuals")
 Window:AddTab("Settings")
 
---// Left column groupbox \\--
+--// left column groupbox
 local Box = Aimbot:AddLeftGroupbox("Section1")
 
 local MyToggle = Box:AddToggle("MyToggle", {
@@ -98,14 +97,13 @@ MyButton:AddButton({
 	end,
 })
 
---// Right column: label with addons, divider \\--
+--// right column: label with addons, divider
 local Right = Aimbot:AddRightGroupbox("Section2")
 local Info = Right:AddLabel({ Text = "Hover Me", Tooltip = "This is a tooltip" })
 Info:AddKeyPicker("AimKey", { Default = "MB2", Mode = "Hold" })
 Right:AddDivider()
 Right:AddToggle("AnotherToggle", { Text = "another toggle", Default = true })
 
---// Tabbox with switchable sections (Section1 / Section2) \\--
 local Tabbox = Visuals:AddLeftTabbox()
 local SecA = Tabbox:AddTab("Section1")
 SecA:AddToggle("SecAToggle", { Text = "esp" })
@@ -113,19 +111,17 @@ SecA:AddSlider("SecASlider", { Text = "distance", Default = 500, Min = 0, Max = 
 local SecB = Tabbox:AddTab("Section2")
 SecB:AddToggle("SecBToggle", { Text = "tracers" })
 
---// Satellite windows (data-driven) \\--
+-- windows
 Library:SetWatermark("SENTINEL.bz | DEV")
-
--- PlayerList auto-populates from the real players and updates on join/leave.
 local PlayerList = Library:CreatePlayerList()
 
---// Drive state programmatically \\--
+--// drive state
 Library.Toggles["MyToggle"]:SetValue(true)
 Library.Options["MySlider"]:OnChanged(function(value)
 	print("MySlider observed:", value)
 end)
 
--- Unload on End (tracked via GiveSignal so it's cleaned up with everything else).
+-- Unload on End (tracked via GiveSignal so it's cleaned up with everything else)
 local UserInputService = game:GetService("UserInputService")
 Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if not gameProcessed and input.KeyCode == Enum.KeyCode.End then

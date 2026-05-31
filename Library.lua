@@ -2047,17 +2047,22 @@ end
 --// Groupbox / Tabbox / Tab                                         --
 --===================================================================--
 local function MakeGroupbox(side, name)
-	-- full-height box: the panel fills the column; content is top-aligned and the empty space below
-	-- the last element sits inside the border (reverted from round 5's content-sizing)
+	-- fixed full-height CLOSED box: flex-fills the column (so all four borders draw, no auto-size
+	-- overshoot), with the scroll inside it — matching the dump's SectionOutline + Content_1
 	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
-	Outline.AutomaticSize = Enum.AutomaticSize.Y
-	Body.AutomaticSize = Enum.AutomaticSize.Y
+	New("UIFlexItem", { Parent = Outline, FlexMode = Enum.UIFlexMode.Fill })
 
-	local Content = New("Frame", {
+	local Content = New("ScrollingFrame", {
 		Parent = Body,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+		TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+		BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
 	})
 	New("UIListLayout", { Parent = Content, Padding = UDim.new(0, 8) })
 	New("UIPadding", {
@@ -2088,9 +2093,9 @@ local function MakeGroupbox(side, name)
 end
 
 local function MakeTabbox(side)
+	-- fixed full-height CLOSED box (flex-fills the column); header on top, scrolling pages below
 	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
-	Outline.AutomaticSize = Enum.AutomaticSize.Y
-	Body.AutomaticSize = Enum.AutomaticSize.Y
+	New("UIFlexItem", { Parent = Outline, FlexMode = Enum.UIFlexMode.Fill })
 
 	-- header row of section selectors (dump's Section1 / Section2)
 	local Header = New("Frame", {
@@ -2104,12 +2109,18 @@ local function MakeTabbox(side)
 		Padding = UDim.new(0, 6),
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	})
-	local Pages = New("Frame", {
+	local Pages = New("ScrollingFrame", {
 		Parent = Body,
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, 16),
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 1, -16),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+		TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+		BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
 	})
 
 	local Tabbox = { Tabs = {}, ActiveTab = nil, Holder = Outline }
@@ -2358,31 +2369,17 @@ function Library:CreateWindow(windowInfo)
 			Padding = UDim.new(0, 6),
 		})
 
-		-- full-height bordered column; groupboxes stack inside its scroll, which scrolls on overflow
+		-- transparent holder filling half the row; the groupbox/tabbox it holds is the full-height
+		-- bordered box (flex-fills this holder), so multiple boxes split the height and each stays closed
 		local function makeSide()
-			local _, _, body = MakePanel(Container, UDim2.new(0.5, 0, 1, 0))
-			New("UIFlexItem", { Parent = body.Parent.Parent, FlexMode = Enum.UIFlexMode.Fill })
-			local Scroll = New("ScrollingFrame", {
-				Parent = body,
+			local Holder = New("Frame", {
+				Parent = Container,
 				BackgroundTransparency = 1,
-				BorderColor3 = "Border",
-				Size = UDim2.fromScale(1, 1),
-				CanvasSize = UDim2.fromOffset(0, 0),
-				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				ScrollBarThickness = 3,
-				ScrollBarImageColor3 = "Accent",
-				TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-				BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+				Size = UDim2.new(0.5, 0, 1, 0),
 			})
-			New("UIListLayout", { Parent = Scroll, Padding = UDim.new(0, 8) })
-			New("UIPadding", {
-				Parent = Scroll,
-				PaddingTop = UDim.new(0, 8),
-				PaddingBottom = UDim.new(0, 8),
-				PaddingLeft = UDim.new(0, 8),
-				PaddingRight = UDim.new(0, 8),
-			})
-			return Scroll
+			New("UIFlexItem", { Parent = Holder, FlexMode = Enum.UIFlexMode.Fill })
+			New("UIListLayout", { Parent = Holder, Padding = UDim.new(0, 6) })
+			return Holder
 		end
 
 		local LeftSide = makeSide()
