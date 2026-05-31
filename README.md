@@ -12,7 +12,7 @@ if getgenv().Library and getgenv().Library.Unload then
     pcall(function() getgenv().Library:Unload() end)
 end
 
-local Library = loadstring(game:HttpGet(".../Library.luau"))()
+local Library = loadstring(game:HttpGet(".../Library.lua"))()
 
 local Window = Library:CreateWindow({ Title = "calcium.supply", Footer = "DEV" })
 local Tab    = Window:AddTab("Aimbot")
@@ -29,7 +29,7 @@ Tog:AddKeyPicker("MyKey", { Default = "LeftControl", Mode = "Toggle", Callback =
 Tog:AddColorPicker("MyColor", { Default = Color3.fromRGB(195, 33, 72), Callback = function(c) end })
 ```
 
-See [`example.luau`](example.luau) for every component type.
+See [`example.lua`](example.lua) for every component type.
 
 ## Components
 
