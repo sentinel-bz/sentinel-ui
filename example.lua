@@ -116,11 +116,8 @@ SecB:AddToggle("SecBToggle", { Text = "tracers" })
 --// Satellite windows (data-driven) \\--
 Library:SetWatermark("SENTINEL.bz | DEV")
 
+-- PlayerList auto-populates from the real players and updates on join/leave.
 local PlayerList = Library:CreatePlayerList()
-PlayerList:SetPlayers({
-	{ Name = "yatskivdenis", Status = "None", Team = "Neutral" },
-	{ Name = "F9MX", Status = "None", Team = "Neutral" },
-})
 
 --// Drive state programmatically \\--
 Library.Toggles["MyToggle"]:SetValue(true)
@@ -128,4 +125,12 @@ Library.Options["MySlider"]:OnChanged(function(value)
 	print("MySlider observed:", value)
 end)
 
-print("Sentinel example loaded. Press RightControl to toggle the menu.")
+-- Unload on End (tracked via GiveSignal so it's cleaned up with everything else).
+local UserInputService = game:GetService("UserInputService")
+Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.End then
+		Library:Unload()
+	end
+end))
+
+print("Sentinel example loaded. RightControl toggles the menu, End unloads it.")

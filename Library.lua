@@ -650,14 +650,19 @@ function Library:AddTooltip(infoStr, hoverInstance)
 		if CurrentHover == hoverInstance or (CurrentMenu and Library:MouseIsOverFrame(CurrentMenu.Menu, Mouse)) then
 			return
 		end
+		-- MouseEnter also fires when an element becomes visible under a stationary cursor (tab/section
+		-- switch), so confirm the cursor is genuinely over the element before showing anything.
+		if not (Library.Toggled and Library:MouseIsOverFrame(hoverInstance, Mouse)) then
+			return
+		end
 		CurrentHover = hoverInstance
 		TooltipLabel.Text = infoStr
-		TooltipFrame.Visible = true
 		while
 			Library.Toggled
 			and Library:MouseIsOverFrame(hoverInstance, Mouse)
 			and not (CurrentMenu and Library:MouseIsOverFrame(CurrentMenu.Menu, Mouse))
 		do
+			TooltipFrame.Visible = true
 			TooltipFrame.Position = UDim2.fromOffset(Mouse.X + 14, Mouse.Y + 12)
 			RunService.RenderStepped:Wait()
 		end
@@ -1797,13 +1802,23 @@ function BaseAddons:AddColorPicker(idx, info)
 	local Shell = MakeWindowShell(Menu.Menu, UDim2.fromScale(1, 1), UDim2.fromOffset(0, 0), info.Title)
 	Shell.Outline.ZIndex = 50
 
-	local SatMap = New("TextButton", {
+	-- outer(10,10,10) + inner(1px 56,56,56) layering, matching the tracks and the dump's colorpicker frames
+	local SatOuter = New("Frame", {
 		Parent = Shell.Body,
-		Text = "",
-		BackgroundColor3 = "White",
+		BackgroundColor3 = "Outline",
 		BorderColor3 = "DarkBorder",
 		Position = UDim2.fromOffset(0, 16),
 		Size = UDim2.new(1, 0, 1, -50),
+		ZIndex = 51,
+	})
+	local SatMap = New("TextButton", {
+		Parent = SatOuter,
+		Text = "",
+		BackgroundColor3 = "White",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 51,
 	})
 	local SatGradientWhite = New("Frame", {
@@ -1842,13 +1857,22 @@ function BaseAddons:AddColorPicker(idx, info)
 		ZIndex = 52,
 	})
 
-	local HueBar = New("TextButton", {
+	local HueOuter = New("Frame", {
 		Parent = Shell.Body,
-		Text = "",
-		BackgroundColor3 = "White",
+		BackgroundColor3 = "Outline",
 		BorderColor3 = "DarkBorder",
 		Position = UDim2.new(0, 0, 1, -32),
 		Size = UDim2.new(1, 0, 0, 10),
+		ZIndex = 51,
+	})
+	local HueBar = New("TextButton", {
+		Parent = HueOuter,
+		Text = "",
+		BackgroundColor3 = "White",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 51,
 	})
 	New("UIGradient", {
@@ -1872,17 +1896,26 @@ function BaseAddons:AddColorPicker(idx, info)
 		ZIndex = 52,
 	})
 
-	local RgbaBox = New("TextBox", {
+	local RgbaOuter = New("Frame", {
 		Parent = Shell.Body,
+		BackgroundColor3 = "Outline",
+		BorderColor3 = "DarkBorder",
+		Position = UDim2.new(0, 0, 1, -16),
+		Size = UDim2.new(1, 0, 0, 14),
+		ZIndex = 51,
+	})
+	local RgbaBox = New("TextBox", {
+		Parent = RgbaOuter,
 		Text = "",
 		PlaceholderText = "r, g, b, a",
 		PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
 		TextColor3 = "DimColor",
 		TextStrokeTransparency = 0.5,
 		BackgroundColor3 = "Inline",
-		BorderColor3 = "Border",
-		Position = UDim2.new(0, 0, 1, -16),
-		Size = UDim2.new(1, 0, 0, 14),
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 51,
 	})
 
@@ -2026,9 +2059,11 @@ local function MakeGroupbox(side, name)
 	})
 
 	if name then
+		-- underlined so section titles read as headers vs. regular labels (intentional, not a dump match)
 		New("TextLabel", {
 			Parent = Content,
-			Text = name,
+			RichText = true,
+			Text = "<u>" .. name .. "</u>",
 			TextColor3 = "FontColor",
 			TextStrokeTransparency = 0,
 			BackgroundTransparency = 1,
@@ -2072,7 +2107,8 @@ local function MakeTabbox(side)
 	function Tabbox:AddTab(name)
 		local SelectButton = New("TextButton", {
 			Parent = Header,
-			Text = name,
+			RichText = true,
+			Text = "<u>" .. name .. "</u>",
 			TextColor3 = "DimColor",
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
@@ -2503,6 +2539,34 @@ function Library:CreatePlayerList()
 		shell.Outline.Visible = v
 	end
 
+	-- populate from the real player list (sorted), refreshed on join/leave
+	function PlayerList:Refresh()
+		local players = Players:GetPlayers()
+		table.sort(players, function(a, b)
+			return a.Name:lower() < b.Name:lower()
+		end)
+		local entries = {}
+		for _, player in players do
+			table.insert(entries, {
+				Name = player.Name,
+				Status = "None",
+				Team = (player.Team and player.Team.Name) or "Neutral",
+			})
+		end
+		PlayerList:SetPlayers(entries)
+	end
+
+	-- PlayerRemoving fires before the player leaves GetPlayers, so defer the refresh a frame
+	Library:GiveSignal(Players.PlayerAdded:Connect(function()
+		PlayerList:Refresh()
+	end))
+	Library:GiveSignal(Players.PlayerRemoving:Connect(function()
+		task.defer(function()
+			PlayerList:Refresh()
+		end)
+	end))
+	PlayerList:Refresh()
+
 	Library.PlayerList = PlayerList
 	return PlayerList
 end
@@ -2513,17 +2577,18 @@ local function ensureKeybindList()
 	if KeybindShell then
 		return
 	end
-	KeybindShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(240, 100), UDim2.fromOffset(16, 200), "binds")
+	-- fixed-size contained shell (same layering as PlayerList) so the black body stays inside the accent ring
+	KeybindShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(240, 200), UDim2.fromOffset(16, 200), "binds")
 	Library:MakeDraggable(KeybindShell.Outline, KeybindShell.Body)
 	local _, _, body = MakePanel(KeybindShell.Body, UDim2.new(1, 0, 1, -18), UDim2.fromOffset(0, 18))
-	body.Parent.Parent.AutomaticSize = Enum.AutomaticSize.Y
-	KeybindShell.Outline.AutomaticSize = Enum.AutomaticSize.Y
-	KeybindShell.Body.AutomaticSize = Enum.AutomaticSize.Y
-	KeybindScroll = New("Frame", {
+	KeybindScroll = New("ScrollingFrame", {
 		Parent = body,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
 	})
 	New("UIListLayout", { Parent = KeybindScroll, Padding = UDim.new(0, 4) })
 	New("UIPadding", {
@@ -2544,7 +2609,7 @@ function Library:AddKeybindRow(keyPicker)
 	})
 	New("UIListLayout", { Parent = Row, FillDirection = Enum.FillDirection.Horizontal })
 	New("UIPadding", { Parent = Row, PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
-	local function col(text, fill)
+	local function col(text, divider)
 		-- AutomaticSize.X keeps each column at least its text width so flex can't squeeze them into overlap
 		local lbl = New("TextLabel", {
 			Parent = Row,
@@ -2556,12 +2621,20 @@ function Library:AddKeybindRow(keyPicker)
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
 		New("UIStroke", { Parent = lbl })
-		if fill then
-			New("UIFlexItem", { Parent = lbl, FlexMode = Enum.UIFlexMode.Fill })
+		if divider then
+			-- 1px column separator in the gap before this column (matches PlayerList / dump)
+			New("Frame", {
+				Parent = lbl,
+				BackgroundColor3 = "Divider",
+				BorderColor3 = "Border",
+				Position = UDim2.fromOffset(-10, 0),
+				Size = UDim2.fromOffset(1, 12),
+			})
 		end
+		New("UIFlexItem", { Parent = lbl, FlexMode = Enum.UIFlexMode.Fill })
 		return lbl
 	end
-	local nameCol = col(keyPicker.Text, true)
+	local nameCol = col(keyPicker.Text, false)
 	local keyCol = col("", true)
 	local modeCol = col("", true)
 	local stateCol = col("", true)
