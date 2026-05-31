@@ -351,40 +351,6 @@ local function MakePanel(parent, size, position)
 	return Outline, Inline, Body
 end
 
--- Auto-height variant: the 1px insets are done with UIPadding (not scale-Y), so AutomaticSize.Y
--- propagates content -> body -> inline -> outline. Used by groupboxes/tabboxes so they end just
--- below their last element instead of filling the column.
-local function MakeAutoPanel(parent)
-	local function layer(host, color, zindex)
-		local frame = New("Frame", {
-			Parent = host,
-			BackgroundColor3 = color,
-			BorderColor3 = "Border",
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			ZIndex = zindex,
-		})
-		New("UIPadding", {
-			Parent = frame,
-			PaddingTop = UDim.new(0, 1),
-			PaddingBottom = UDim.new(0, 1),
-			PaddingLeft = UDim.new(0, 1),
-			PaddingRight = UDim.new(0, 1),
-		})
-		return frame
-	end
-	local Outline = layer(parent, "Outline", 1)
-	local Inline = layer(Outline, "Inline", 2)
-	local Body = New("Frame", {
-		Parent = Inline,
-		BackgroundColor3 = "Body",
-		BorderColor3 = "Border",
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-	})
-	return Outline, Inline, Body
-end
-
 --// ScreenGui \\--
 local function ParentUI(ui)
 	pcall(protectgui, ui)
@@ -2081,7 +2047,11 @@ end
 --// Groupbox / Tabbox / Tab                                         --
 --===================================================================--
 local function MakeGroupbox(side, name)
-	local Outline, Inline, Body = MakeAutoPanel(side)
+	-- full-height box: the panel fills the column; content is top-aligned and the empty space below
+	-- the last element sits inside the border (reverted from round 5's content-sizing)
+	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
+	Outline.AutomaticSize = Enum.AutomaticSize.Y
+	Body.AutomaticSize = Enum.AutomaticSize.Y
 
 	local Content = New("Frame", {
 		Parent = Body,
@@ -2118,7 +2088,9 @@ local function MakeGroupbox(side, name)
 end
 
 local function MakeTabbox(side)
-	local Outline, Inline, Body = MakeAutoPanel(side)
+	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
+	Outline.AutomaticSize = Enum.AutomaticSize.Y
+	Body.AutomaticSize = Enum.AutomaticSize.Y
 
 	-- header row of section selectors (dump's Section1 / Section2)
 	local Header = New("Frame", {
@@ -2386,15 +2358,15 @@ function Library:CreateWindow(windowInfo)
 			Padding = UDim.new(0, 6),
 		})
 
-		-- borderless scroll region: groupboxes (auto-height, bordered) stack and scroll when they
-		-- overflow; the side itself has no border so a short groupbox ends below its last element
+		-- full-height bordered column; groupboxes stack inside its scroll, which scrolls on overflow
 		local function makeSide()
+			local _, _, body = MakePanel(Container, UDim2.new(0.5, 0, 1, 0))
+			New("UIFlexItem", { Parent = body.Parent.Parent, FlexMode = Enum.UIFlexMode.Fill })
 			local Scroll = New("ScrollingFrame", {
-				Parent = Container,
+				Parent = body,
 				BackgroundTransparency = 1,
 				BorderColor3 = "Border",
-				BorderSizePixel = 0,
-				Size = UDim2.new(0.5, 0, 1, 0),
+				Size = UDim2.fromScale(1, 1),
 				CanvasSize = UDim2.fromOffset(0, 0),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				ScrollBarThickness = 3,
@@ -2402,8 +2374,14 @@ function Library:CreateWindow(windowInfo)
 				TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
 				BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
 			})
-			New("UIFlexItem", { Parent = Scroll, FlexMode = Enum.UIFlexMode.Fill })
 			New("UIListLayout", { Parent = Scroll, Padding = UDim.new(0, 8) })
+			New("UIPadding", {
+				Parent = Scroll,
+				PaddingTop = UDim.new(0, 8),
+				PaddingBottom = UDim.new(0, 8),
+				PaddingLeft = UDim.new(0, 8),
+				PaddingRight = UDim.new(0, 8),
+			})
 			return Scroll
 		end
 
