@@ -2092,6 +2092,10 @@ local function MakeTabbox(side)
 	Outline.AutomaticSize = Enum.AutomaticSize.Y
 	Body.AutomaticSize = Enum.AutomaticSize.Y
 
+	-- top offset so the header isn't flush to the box's top border — matches the groupbox's
+	-- content UIPadding top (8) and the dump's Content_1 padding
+	New("UIPadding", { Parent = Body, PaddingTop = UDim.new(0, 8) })
+
 	-- header row of section selectors (dump's Section1 / Section2)
 	local Header = New("Frame", {
 		Parent = Body,
@@ -2112,7 +2116,7 @@ local function MakeTabbox(side)
 		AutomaticSize = Enum.AutomaticSize.Y,
 	})
 
-	local Tabbox = { Tabs = {}, ActiveTab = nil, Holder = Outline }
+	local Tabbox = { Tabs = {}, ActiveTab = nil, Holder = Outline, Body = Body }
 
 	function Tabbox:AddTab(name)
 		-- underline is the active-section indicator only (the Underline frame below), so the text is plain
