@@ -115,6 +115,17 @@ SecB:AddToggle("SecBToggle", { Text = "tracers" })
 Library:SetWatermark("SENTINEL.bz | DEV")
 local PlayerList = Library:CreatePlayerList()
 
+--// config save/load — our library mirrors Obsidian's API, so Obsidian's SaveManager works as-is.
+-- (Hosted from Obsidian's repo for now; long-term it ships in sentinel-ui — see README note + LICENSE.)
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetFolder("sentinel/configs")
+
+local ConfigTab = Window:AddTab("Config")
+SaveManager:BuildConfigSection(ConfigTab)
+SaveManager:LoadAutoloadConfig()
+
 --// drive state
 Library.Toggles["MyToggle"]:SetValue(true)
 Library.Options["MySlider"]:OnChanged(function(value)

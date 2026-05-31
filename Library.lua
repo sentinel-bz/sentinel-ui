@@ -693,6 +693,81 @@ function Library:AddTooltip(infoStr, hoverInstance)
 	return tip
 end
 
+--// Notifications \\--
+local NotifyHolder
+function Library:Notify(info, time)
+	local text = typeof(info) == "table" and (info.Description or info.Title or "") or tostring(info)
+	time = (typeof(info) == "table" and info.Time) or time or 3
+
+	if not NotifyHolder then
+		NotifyHolder = New("Frame", {
+			Parent = ScreenGui,
+			AnchorPoint = Vector2.new(1, 0),
+			BackgroundTransparency = 1,
+			Position = UDim2.new(1, -16, 0, 16),
+			Size = UDim2.new(0, 240, 1, -32),
+			ZIndex = 200,
+		})
+		New("UIListLayout", {
+			Parent = NotifyHolder,
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			Padding = UDim.new(0, 6),
+		})
+	end
+
+	-- layered toast (8,8,8 outer -> 38,38,38 inner w/ 1px border), auto-sized via a padding chain
+	local outer = New("Frame", {
+		Parent = NotifyHolder,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, 0),
+		ZIndex = 200,
+	})
+	New("UIPadding", {
+		Parent = outer,
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		PaddingLeft = UDim.new(0, 1),
+		PaddingRight = UDim.new(0, 1),
+	})
+	local inner = New("Frame", {
+		Parent = outer,
+		BackgroundColor3 = "Element",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, 0),
+		ZIndex = 200,
+	})
+	New("UIPadding", {
+		Parent = inner,
+		PaddingTop = UDim.new(0, 3),
+		PaddingBottom = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 6),
+		PaddingRight = UDim.new(0, 6),
+	})
+	New("TextLabel", {
+		Parent = inner,
+		Text = text,
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0,
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(0, 14),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		ZIndex = 201,
+	})
+
+	task.delay(time, function()
+		pcall(function()
+			outer:Destroy()
+		end)
+	end)
+	return { Object = outer }
+end
+
 --===================================================================--
 --// Component constructors (Funcs)                                  --
 --===================================================================--
@@ -1472,8 +1547,12 @@ function Funcs:AddDropdown(idx, info)
 		if Dropdown.Multi then
 			Dropdown.Value = {}
 			if typeof(value) == "table" then
-				for _, v in value do
-					Dropdown.Value[v] = true
+				for k, v in value do
+					if type(k) == "number" then
+						Dropdown.Value[v] = true -- list form { "Item1", "Item3" }
+					elseif v then
+						Dropdown.Value[k] = true -- map form { Item1 = true } (SaveManager)
+					end
 				end
 			end
 		else
@@ -1533,6 +1612,11 @@ local MouseStrings = {
 	MB2 = Enum.UserInputType.MouseButton2,
 	MB3 = Enum.UserInputType.MouseButton3,
 }
+local MouseInputToString = {
+	[Enum.UserInputType.MouseButton1] = "MB1",
+	[Enum.UserInputType.MouseButton2] = "MB2",
+	[Enum.UserInputType.MouseButton3] = "MB3",
+}
 -- Enum.KeyCode[<invalid>] throws in Roblox, so resolve through pcall.
 local function ResolveKey(key)
 	if typeof(key) == "EnumItem" then
@@ -1554,6 +1638,20 @@ local function ResolveKey(key)
 	end
 	return nil
 end
+-- canonical, round-trippable name for a resolved bind (KeyCode.Name or "MB2"), so SaveManager's
+-- object.Value -> ResolveKey survives a save/load. The "[lc]" display is computed separately.
+local function CanonicalKeyName(bind)
+	if bind == nil then
+		return "None"
+	end
+	if MouseInputToString[bind] then
+		return MouseInputToString[bind]
+	end
+	if typeof(bind) == "EnumItem" then
+		return bind.Name
+	end
+	return "None"
+end
 
 function BaseAddons:AddKeyPicker(idx, info)
 	info = Library:Validate(info, {
@@ -1573,6 +1671,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 	local KeyPicker = {
 		Value = info.Default,
 		Mode = info.Mode,
+		Modifiers = {}, -- not implemented; present so SaveManager's Save can read it
 		Toggled = false,
 		Type = "KeyPicker",
 		Text = info.Text ~= "KeyPicker" and info.Text or (self.Text or "KeyPicker"),
@@ -1666,16 +1765,18 @@ function BaseAddons:AddKeyPicker(idx, info)
 	function KeyPicker:OnChanged(func)
 		table.insert(KeyPicker.OnChangedFns, func)
 	end
-	function KeyPicker:SetValue(key)
+	function KeyPicker:SetValue(data)
+		-- accept SaveManager's { key, mode, modifiers } table, or a single key (string/EnumItem)
+		local key = data
+		if type(data) == "table" then
+			key = data[1]
+			if data[2] then
+				KeyPicker.Mode = data[2]
+			end
+		end
 		local bind = ResolveKey(key)
 		KeyPicker.Bind = bind
-		if bind == nil then
-			KeyPicker.Value = "None"
-		elseif type(key) == "string" then
-			KeyPicker.Value = key
-		else
-			KeyPicker.Value = Library:GetKeyString(bind)
-		end
+		KeyPicker.Value = CanonicalKeyName(bind)
 		KeyPicker:Display()
 		KeyPicker:Update()
 	end
@@ -1719,10 +1820,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 				end
 				picking = false
 			elseif SpecialInputs[input.UserInputType] then
-				KeyPicker.Bind = input.UserInputType
-				KeyPicker.Value = Library:GetKeyString(input.UserInputType)
-				KeyPicker:Display()
-				KeyPicker:Update()
+				KeyPicker:SetValue(input.UserInputType)
 				picking = false
 			end
 			return
