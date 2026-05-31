@@ -47,4 +47,10 @@ Watermark · PlayerList · KeybindList.
   restores `MouseIconEnabled`, destroys the ScreenGui, and clears `getgenv().Library`.
 - Re-running the script auto-unloads any prior instance.
 
-Pure Luau, single file, no dependencies; runs as an executor script.
+Pure Luau, single file; runs as an executor script.
+
+## Config save/load
+
+The library mirrors Obsidian's API, so Obsidian's `SaveManager` works against it unmodified. A
+verbatim copy is vendored under [`dependencies/`](dependencies/) (MIT, © deividcomsono — see
+[`dependencies/LICENSE`](dependencies/LICENSE)). See [`example.lua`](example.lua) for the wiring.

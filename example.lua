@@ -116,8 +116,8 @@ Library:SetWatermark("SENTINEL.bz | DEV")
 local PlayerList = Library:CreatePlayerList()
 
 --// config save/load — our library mirrors Obsidian's API, so Obsidian's SaveManager works as-is.
--- (Hosted from Obsidian's repo for now; long-term it ships in sentinel-ui — see README note + LICENSE.)
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+-- Vendored under dependencies/ (MIT, © deividcomsono — see dependencies/LICENSE).
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetFolder("sentinel/configs")
