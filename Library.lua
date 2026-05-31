@@ -697,7 +697,16 @@ end
 local NotifyHolder
 function Library:Notify(info, time)
 	local text = typeof(info) == "table" and (info.Description or info.Title or "") or tostring(info)
-	time = (typeof(info) == "table" and info.Time) or time or 3
+	local persist = typeof(info) == "table" and info.Persist == true
+	if typeof(info) == "table" and info.Time ~= nil then
+		time = info.Time
+	end
+	if time == nil then
+		time = 3
+	end
+	if type(time) ~= "number" or time <= 0 then
+		persist = true -- 0/nil/persistent => no auto-dismiss, bar stays full
+	end
 
 	if not NotifyHolder then
 		NotifyHolder = New("Frame", {
@@ -740,14 +749,19 @@ function Library:Notify(info, time)
 		Size = UDim2.fromOffset(0, 0),
 		ZIndex = 200,
 	})
-	New("UIPadding", {
+	-- theme accent countdown bar along the bottom edge (full width, 2px tall). BackgroundColor3 =
+	-- "Accent" auto-registers it (via the New factory) so SetAccent recolors it. Scale-X width and
+	-- scale-Y position keep it out of the AutomaticSize chain (the label drives the toast size).
+	local bar = New("Frame", {
 		Parent = inner,
-		PaddingTop = UDim.new(0, 3),
-		PaddingBottom = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 6),
-		PaddingRight = UDim.new(0, 6),
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
+		Size = UDim2.new(1, 0, 0, 2),
+		ZIndex = 202,
 	})
-	New("TextLabel", {
+	local label = New("TextLabel", {
 		Parent = inner,
 		Text = text,
 		TextColor3 = "FontColor",
@@ -759,13 +773,41 @@ function Library:Notify(info, time)
 		TextWrapped = true,
 		ZIndex = 201,
 	})
+	New("UIPadding", {
+		Parent = label,
+		PaddingTop = UDim.new(0, 3),
+		PaddingBottom = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 6),
+		PaddingRight = UDim.new(0, 6),
+	})
 
-	task.delay(time, function()
-		pcall(function()
-			outer:Destroy()
+	local handle = { Object = outer, AccentBar = bar }
+
+	if not persist then
+		-- single source of truth for the duration: the bar drains over `time` and the tween's Completed
+		-- drives the dismiss, so "empty" lands exactly on dismiss. Left-anchored, Size.X.Scale 1 -> 0.
+		local drain = TweenService:Create(bar, TweenInfo.new(time, Enum.EasingStyle.Linear), {
+			Size = UDim2.new(0, 0, 0, 2),
+		})
+		local function dismiss()
+			pcall(function()
+				drain:Cancel()
+			end)
+			pcall(function()
+				outer:Destroy()
+			end)
+		end
+		Library:GiveSignal(drain.Completed:Connect(dismiss))
+		Library:OnUnload(function()
+			pcall(function()
+				drain:Cancel()
+			end)
 		end)
-	end)
-	return { Object = outer }
+		drain:Play()
+		handle.Tween = drain
+	end
+
+	return handle
 end
 
 --===================================================================--

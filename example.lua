@@ -115,8 +115,7 @@ SecB:AddToggle("SecBToggle", { Text = "tracers" })
 Library:SetWatermark("SENTINEL.bz | DEV")
 local PlayerList = Library:CreatePlayerList()
 
---// config save/load — our library mirrors Obsidian's API, so Obsidian's SaveManager works as-is.
--- Vendored under dependencies/ (MIT, © deividcomsono — see dependencies/LICENSE).
+--// config save/load
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
@@ -139,5 +138,10 @@ Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProce
 		Library:Unload()
 	end
 end))
+
+-- notifications: a couple of defaults + one short Time so the accent bar drain is easy to watch
+Library:Notify("Sentinel UI loaded")
+Library:Notify("RightControl toggles · End unloads")
+Library:Notify("Watch this accent bar drain over 6s", 6)
 
 print("Sentinel example loaded. RightControl toggles the menu, End unloads it.")
