@@ -752,13 +752,13 @@ function Library:Notify(info, time)
 	-- theme accent countdown bar along the bottom edge (full width, 2px tall). BackgroundColor3 =
 	-- "Accent" auto-registers it (via the New factory) so SetAccent recolors it. Scale-X width and
 	-- scale-Y position keep it out of the AutomaticSize chain (the label drives the toast size).
-	-- Right-anchored so the drain empties right->left (left end retreats).
+	-- Left-anchored so the drain empties left->right (right end retreats).
 	local bar = New("Frame", {
 		Parent = inner,
 		BackgroundColor3 = "Accent",
 		BorderColor3 = "Border",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 0, 1, 0),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
 		Size = UDim2.new(1, 0, 0, 2),
 		ZIndex = 202,
 	})
@@ -786,7 +786,7 @@ function Library:Notify(info, time)
 
 	if not persist then
 		-- single source of truth for the duration: the bar drains over `time` and the tween's Completed
-		-- drives the dismiss, so "empty" lands exactly on dismiss. Right-anchored, Size.X.Scale 1 -> 0.
+		-- drives the dismiss, so "empty" lands exactly on dismiss. Left-anchored, Size.X.Scale 1 -> 0.
 		local drain = TweenService:Create(bar, TweenInfo.new(time, Enum.EasingStyle.Linear), {
 			Size = UDim2.new(0, 0, 0, 2),
 		})
