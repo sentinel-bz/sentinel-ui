@@ -1,5 +1,5 @@
 --// Sentinel usage example — demonstrates every component type.
---// Point the URL at wherever Sentinel.lua is hosted, or require it locally.
+--// Point the URL at wherever Library.lua is hosted, or require it locally.
 
 -- Re-execution guard: kill any prior instance before re-running.
 if getgenv().Library and getgenv().Library.Unload then
@@ -8,7 +8,7 @@ if getgenv().Library and getgenv().Library.Unload then
 	end)
 end
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-cx/sentinel-lua/main/Sentinel.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-cx/sentinel-ui/main/Library.lua"))()
 
 local Window = Library:CreateWindow({
 	Title = "calcium.supply",

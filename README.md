@@ -12,7 +12,7 @@ if getgenv().Library and getgenv().Library.Unload then
     pcall(function() getgenv().Library:Unload() end)
 end
 
-local Library = loadstring(game:HttpGet(".../Sentinel.lua"))()
+local Library = loadstring(game:HttpGet(".../Library.lua"))()
 
 local Window = Library:CreateWindow({ Title = "calcium.supply", Footer = "DEV" })
 local Tab    = Window:AddTab("Aimbot")
