@@ -3,7 +3,7 @@
 A self-contained Luau UI library that recreates the "calcium.supply" cheat-menu *chrome* —
 interface only, no gameplay logic. It reproduces the dump's exact layered-border visual style
 (outline → accent → translucent fill, crimson accent `Color3.fromRGB(195, 33, 72)`, 12px stroked
-font) while making everything data-driven, in the architectural style of the Obsidian UI library.
+font) while making everything data-driven.
 
 ## Usage
 
@@ -48,9 +48,3 @@ Watermark · PlayerList · KeybindList.
 - Re-running the script auto-unloads any prior instance.
 
 Pure Luau, single file, no dependencies; runs as an executor script.
-
-## License
-
-MIT — see [`LICENSE`](LICENSE). Architecture and interaction patterns are adapted from the
-[Obsidian UI Library](https://github.com/deividcomsono/Obsidian) (MIT, © deividcomsono); no
-Obsidian source is bundled. Its license notice is reproduced in `LICENSE`.
