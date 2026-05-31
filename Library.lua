@@ -2092,9 +2092,15 @@ local function MakeTabbox(side)
 	Outline.AutomaticSize = Enum.AutomaticSize.Y
 	Body.AutomaticSize = Enum.AutomaticSize.Y
 
-	-- top offset so the header isn't flush to the box's top border — matches the groupbox's
-	-- content UIPadding top (8) and the dump's Content_1 padding
-	New("UIPadding", { Parent = Body, PaddingTop = UDim.new(0, 8) })
+	-- inset content 8px on all sides so the tabbox floats inside the tab with the same gap a
+	-- groupbox has (its Content frame uses UIPadding 8 all around); round 8 only did the top
+	New("UIPadding", {
+		Parent = Body,
+		PaddingTop = UDim.new(0, 8),
+		PaddingBottom = UDim.new(0, 8),
+		PaddingLeft = UDim.new(0, 8),
+		PaddingRight = UDim.new(0, 8),
+	})
 
 	-- header row of section selectors (dump's Section1 / Section2)
 	local Header = New("Frame", {
