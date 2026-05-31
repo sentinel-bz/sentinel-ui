@@ -8,10 +8,10 @@ if getgenv().Library and getgenv().Library.Unload then
 	end)
 end
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-cx/sentinel-ui/main/Library.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/Library.lua"))()
 
 local Window = Library:CreateWindow({
-	Title = "calcium.supply",
+	Title = "sentinel.bz",
 	Footer = "DEV",
 	Center = true,
 	ShowCustomCursor = false,
@@ -100,7 +100,7 @@ MyButton:AddButton({
 
 --// Right column: label with addons, divider \\--
 local Right = Aimbot:AddRightGroupbox("Section2")
-local Info = Right:AddLabel("hover me", true)
+local Info = Right:AddLabel({ Text = "Hover Me", Tooltip = "This is a tooltip" })
 Info:AddKeyPicker("AimKey", { Default = "MB2", Mode = "Hold" })
 Right:AddDivider()
 Right:AddToggle("AnotherToggle", { Text = "another toggle", Default = true })
@@ -114,7 +114,7 @@ local SecB = Tabbox:AddTab("Section2")
 SecB:AddToggle("SecBToggle", { Text = "tracers" })
 
 --// Satellite windows (data-driven) \\--
-Library:SetWatermark("CALCIUM.supply | DEV")
+Library:SetWatermark("SENTINEL.cx | DEV")
 
 local PlayerList = Library:CreatePlayerList()
 PlayerList:SetPlayers({

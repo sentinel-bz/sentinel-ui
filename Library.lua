@@ -596,15 +596,41 @@ Library:GiveSignal(UserInputService.InputBegan:Connect(function(input)
 end))
 
 --// Tooltip \\--
-local TooltipShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(0, 0))
-do
-	TooltipShell.Outline.Visible = false
-	TooltipShell.Outline.ZIndex = 60
-	TooltipShell.Outline.AutomaticSize = Enum.AutomaticSize.XY
-	TooltipShell.Body.AutomaticSize = Enum.AutomaticSize.XY
-end
+-- dump's Tooltip: outer(8,8,8) -> inner(38,38,38, 1px 56,56,56) -> label, auto-sized via a padding chain (no relative sizes, so it can't collapse)
+local TooltipFrame = New("Frame", {
+	Parent = ScreenGui,
+	BackgroundColor3 = "Dark",
+	BorderColor3 = "DarkBorder",
+	AutomaticSize = Enum.AutomaticSize.XY,
+	Size = UDim2.fromOffset(0, 0),
+	Visible = false,
+	ZIndex = 60,
+})
+New("UIPadding", {
+	Parent = TooltipFrame,
+	PaddingTop = UDim.new(0, 1),
+	PaddingBottom = UDim.new(0, 1),
+	PaddingLeft = UDim.new(0, 1),
+	PaddingRight = UDim.new(0, 1),
+})
+local TooltipInner = New("Frame", {
+	Parent = TooltipFrame,
+	BackgroundColor3 = "Element",
+	BorderColor3 = "ElementBorder",
+	BorderSizePixel = 1,
+	AutomaticSize = Enum.AutomaticSize.XY,
+	Size = UDim2.fromOffset(0, 0),
+	ZIndex = 60,
+})
+New("UIPadding", {
+	Parent = TooltipInner,
+	PaddingTop = UDim.new(0, 2),
+	PaddingBottom = UDim.new(0, 4),
+	PaddingLeft = UDim.new(0, 4),
+	PaddingRight = UDim.new(0, 4),
+})
 local TooltipLabel = New("TextLabel", {
-	Parent = TooltipShell.Body,
+	Parent = TooltipInner,
 	Text = "",
 	TextColor3 = "FontColor",
 	TextStrokeTransparency = 0,
@@ -612,6 +638,7 @@ local TooltipLabel = New("TextLabel", {
 	AutomaticSize = Enum.AutomaticSize.XY,
 	Size = UDim2.fromOffset(0, 14),
 	TextXAlignment = Enum.TextXAlignment.Left,
+	ZIndex = 61,
 })
 local CurrentHover
 function Library:AddTooltip(infoStr, hoverInstance)
@@ -625,16 +652,16 @@ function Library:AddTooltip(infoStr, hoverInstance)
 		end
 		CurrentHover = hoverInstance
 		TooltipLabel.Text = infoStr
-		TooltipShell.Outline.Visible = true
+		TooltipFrame.Visible = true
 		while
 			Library.Toggled
 			and Library:MouseIsOverFrame(hoverInstance, Mouse)
 			and not (CurrentMenu and Library:MouseIsOverFrame(CurrentMenu.Menu, Mouse))
 		do
-			TooltipShell.Outline.Position = UDim2.fromOffset(Mouse.X + 14, Mouse.Y + 12)
+			TooltipFrame.Position = UDim2.fromOffset(Mouse.X + 14, Mouse.Y + 12)
 			RunService.RenderStepped:Wait()
 		end
-		TooltipShell.Outline.Visible = false
+		TooltipFrame.Visible = false
 		CurrentHover = nil
 	end
 	table.insert(tip.Signals, hoverInstance.MouseEnter:Connect(doHover))
@@ -643,7 +670,7 @@ function Library:AddTooltip(infoStr, hoverInstance)
 		tip.Signals,
 		hoverInstance.MouseLeave:Connect(function()
 			if CurrentHover == hoverInstance then
-				TooltipShell.Outline.Visible = false
+				TooltipFrame.Visible = false
 				CurrentHover = nil
 			end
 		end)
@@ -673,9 +700,9 @@ local function applyTooltip(handle, info, instance)
 	end
 end
 
-function Funcs:AddLabel(info)
+function Funcs:AddLabel(info, doesWrap)
 	if typeof(info) == "string" then
-		info = { Text = info }
+		info = { Text = info, DoesWrap = doesWrap }
 	end
 	info = Library:Validate(info, { Text = "Label", DoesWrap = false, Visible = true })
 
@@ -721,6 +748,7 @@ function Funcs:AddLabel(info)
 		Holder.Visible = v
 	end
 
+	applyTooltip(Label, info, Holder)
 	setmetatable(Label, { __index = BaseAddons })
 	return Label
 end
@@ -752,8 +780,7 @@ function Funcs:AddButton(info, func)
 	local Holder = New("Frame", {
 		Parent = self.Container,
 		Name = "Button",
-		BackgroundColor3 = "Dark",
-		BorderColor3 = "DarkBorder",
+		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 16),
 	})
 	New("UIListLayout", {
@@ -767,16 +794,25 @@ function Funcs:AddButton(info, func)
 	local Button = { Type = "Button", Holder = Holder }
 
 	local function makeSub(subInfo)
-		local Base = New("TextButton", {
+		-- outer(0,0,0) wrapper + inner(38,38,38) button inset 2px with a 1px 56,56,56 border, per the dump
+		local Wrapper = New("Frame", {
 			Parent = Holder,
+			BackgroundColor3 = "Border",
+			BorderColor3 = "DarkBorder",
+			Size = UDim2.fromScale(1, 1),
+		})
+		New("UIFlexItem", { Parent = Wrapper, FlexMode = Enum.UIFlexMode.Fill })
+		local Base = New("TextButton", {
+			Parent = Wrapper,
 			Text = subInfo.Text,
 			TextColor3 = "DimColor",
 			TextStrokeTransparency = 0,
 			BackgroundColor3 = "Element",
 			BorderColor3 = "ElementBorder",
-			Size = UDim2.fromScale(1, 1),
+			BorderSizePixel = 1,
+			Position = UDim2.fromOffset(2, 2),
+			Size = UDim2.new(1, -4, 1, -4),
 		})
-		New("UIFlexItem", { Parent = Base, FlexMode = Enum.UIFlexMode.Fill })
 
 		local Sub = { Text = subInfo.Text, Func = subInfo.Func, Base = Base }
 		local lastClick = 0
@@ -869,6 +905,7 @@ function Funcs:AddToggle(idx, info)
 		Parent = Box,
 		BackgroundColor3 = "ElementFill",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 	})
@@ -993,6 +1030,7 @@ function Funcs:AddInput(idx, info)
 		TextStrokeTransparency = 0.5,
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		ClearTextOnFocus = info.ClearTextOnFocus,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
@@ -1085,7 +1123,7 @@ function Funcs:AddSlider(idx, info)
 		TextColor3 = "DimColor",
 		TextStrokeTransparency = 0.5,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 26),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		Visible = info.Visible,
@@ -1105,6 +1143,7 @@ function Funcs:AddSlider(idx, info)
 		Parent = Bar,
 		BackgroundColor3 = "ElementFill",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 	})
@@ -1274,6 +1313,7 @@ function Funcs:AddDropdown(idx, info)
 		TextStrokeTransparency = 0.5,
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -1311,6 +1351,7 @@ function Funcs:AddDropdown(idx, info)
 		Parent = ListOuter,
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 50,
@@ -1559,6 +1600,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 		Parent = ModeOuter,
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 50,
@@ -2214,7 +2256,7 @@ function Library:CreateWindow(windowInfo)
 				end
 			end)
 		else
-			TooltipShell.Outline.Visible = false
+			TooltipFrame.Visible = false
 			if CurrentMenu then
 				CurrentMenu:Close()
 			end
@@ -2427,7 +2469,7 @@ function Library:CreatePlayerList()
 				FillDirection = Enum.FillDirection.Horizontal,
 			})
 			New("UIPadding", { Parent = Row, PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
-			local function col(text)
+			local function col(text, withDivider)
 				local lbl = New("TextLabel", {
 					Parent = Row,
 					Text = text,
@@ -2438,11 +2480,21 @@ function Library:CreatePlayerList()
 					TextTruncate = Enum.TextTruncate.AtEnd,
 				})
 				New("UIStroke", { Parent = lbl })
+				if withDivider then
+					-- 1px vertical separator sitting in the gap before this column (dump's -10 offset)
+					New("Frame", {
+						Parent = lbl,
+						BackgroundColor3 = "Divider",
+						BorderColor3 = "Border",
+						Position = UDim2.fromOffset(-10, 0),
+						Size = UDim2.fromOffset(1, 12),
+					})
+				end
 				New("UIFlexItem", { Parent = lbl, FlexMode = Enum.UIFlexMode.Fill })
 			end
 			col(entry.Name or "?")
-			col(entry.Status or "None")
-			col(entry.Team or "Neutral")
+			col(entry.Status or "None", true)
+			col(entry.Team or "Neutral", true)
 			table.insert(PlayerList.Rows, Row)
 		end
 	end
@@ -2461,7 +2513,7 @@ local function ensureKeybindList()
 	if KeybindShell then
 		return
 	end
-	KeybindShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(180, 100), UDim2.fromOffset(16, 200), "binds")
+	KeybindShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(240, 100), UDim2.fromOffset(16, 200), "binds")
 	Library:MakeDraggable(KeybindShell.Outline, KeybindShell.Body)
 	local _, _, body = MakePanel(KeybindShell.Body, UDim2.new(1, 0, 1, -18), UDim2.fromOffset(0, 18))
 	body.Parent.Parent.AutomaticSize = Enum.AutomaticSize.Y
@@ -2493,12 +2545,14 @@ function Library:AddKeybindRow(keyPicker)
 	New("UIListLayout", { Parent = Row, FillDirection = Enum.FillDirection.Horizontal })
 	New("UIPadding", { Parent = Row, PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
 	local function col(text, fill)
+		-- AutomaticSize.X keeps each column at least its text width so flex can't squeeze them into overlap
 		local lbl = New("TextLabel", {
 			Parent = Row,
 			Text = text,
 			TextColor3 = Color3.fromRGB(180, 180, 180),
 			BackgroundTransparency = 1,
 			Size = UDim2.fromScale(0, 1),
+			AutomaticSize = Enum.AutomaticSize.X,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
 		New("UIStroke", { Parent = lbl })
