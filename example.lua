@@ -114,7 +114,7 @@ local SecB = Tabbox:AddTab("Section2")
 SecB:AddToggle("SecBToggle", { Text = "tracers" })
 
 --// Satellite windows (data-driven) \\--
-Library:SetWatermark("SENTINEL.cx | DEV")
+Library:SetWatermark("SENTINEL.bz | DEV")
 
 local PlayerList = Library:CreatePlayerList()
 PlayerList:SetPlayers({
