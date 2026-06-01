@@ -1,6 +1,5 @@
 --!nonstrict
---// Sentinel UI Library — a data-driven reimplementation of the "calcium.supply" menu chrome.
---// Interface framework only: components fire a user-supplied Callback and nothing else.
+--// Sentinel UI Library
 
 if getgenv and getgenv().Library and getgenv().Library.Unload then
 	pcall(function()
