@@ -457,11 +457,11 @@ local ScreenGui = New("ScreenGui", {
 ParentUI(ScreenGui)
 Library.ScreenGui = ScreenGui
 
-ScreenGui.DescendantRemoving:Connect(function(instance)
+Library:GiveSignal(ScreenGui.DescendantRemoving:Connect(function(instance)
 	if Library.Registry[instance] then
 		Library.Registry[instance] = nil
 	end
-end)
+end))
 
 local Cursor
 do
