@@ -124,6 +124,10 @@ ThemeManager.BuiltInThemes["Sentinel"] =
 ThemeManager.DefaultTheme = "Sentinel"
 ThemeManager:ApplyToTab(Window:AddTab("Themes"))
 
+-- add our pixel font as a selectable "Sentinel" option; default the picker to Juro
+Library.Options.FontFace:SetValues({ "Sentinel", "BuilderSans", "Code", "Fantasy", "Gotham", "Jura", "Roboto", "RobotoMono", "SourceSans" })
+Library.Options.FontFace:SetValue("Jura")
+
 --// config save/load (after ThemeManager so the theme options exist; IgnoreThemeSettings stops double-save)
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)

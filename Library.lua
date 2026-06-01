@@ -43,7 +43,9 @@ local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 local Mouse = cloneref(LocalPlayer:GetMouse())
 local OriginalMouseIconEnabled = UserInputService.MouseIconEnabled
 
-local FONT = Font.new("rbxassetid://12187371840", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+local PIXEL_FONT = "rbxassetid://12187371840"
+-- default matches ThemeManager's "Jura" option so the out-of-box font == selecting Jura in the dropdown
+local FONT = Font.fromEnum(Enum.Font.Jura)
 
 --// Theme \\--
 local Scheme = {
@@ -218,7 +220,17 @@ function Library:SetAccent(color)
 end
 
 function Library:SetFont(font)
-	if typeof(font) == "EnumItem" then
+	if type(font) == "string" then
+		if font == "Sentinel" then
+			font = Font.new(PIXEL_FONT)
+		else
+			-- resolve a font name the same way ThemeManager would (Enum.Font[name]); invalid -> no-op
+			local ok, resolved = pcall(function()
+				return Font.fromEnum(Enum.Font[font])
+			end)
+			font = ok and resolved or nil
+		end
+	elseif typeof(font) == "EnumItem" then
 		font = Font.fromEnum(font)
 	end
 	if typeof(font) ~= "Font" then
