@@ -41,13 +41,12 @@ end
 local ThemeManager = {}
 do
     local ThemeFields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
-    ThemeManager.Folder = "ObsidianLibSettings"
-    -- if not isfolder(ThemeManager.Folder) then makefolder(ThemeManager.Folder) end
+    ThemeManager.Folder = "sentinel"
 
     ThemeManager.Library = nil
     ThemeManager.AppliedToTab = false
     ThemeManager.BuiltInThemes = {
-        ["Default"] = {
+        ["Obsidian"] = {
             1,
             { FontColor = "ffffff", MainColor = "191919", AccentColor = "7d55ff", BackgroundColor = "0f0f0f", OutlineColor = "282828" },
         },
@@ -224,7 +223,7 @@ do
     end
 
     function ThemeManager:LoadDefault()
-        local theme = "Default"
+        local theme = "Obsidian"
         local content = isfile(self.Folder .. "/themes/default.txt") and readfile(self.Folder .. "/themes/default.txt")
 
         local isDefault = true
@@ -266,8 +265,8 @@ do
                 LibraryScheme[field] = Color3.fromHex(theme[field])
 
             else
-                FinalTheme[field] = ThemeManager.BuiltInThemes["Default"][2][field]
-                LibraryScheme[field] = Color3.fromHex(ThemeManager.BuiltInThemes["Default"][2][field])
+                FinalTheme[field] = ThemeManager.BuiltInThemes["Obsidian"][2][field]
+                LibraryScheme[field] = Color3.fromHex(ThemeManager.BuiltInThemes["Obsidian"][2][field])
             end
         end
 
@@ -289,7 +288,7 @@ do
         end
 
         self.Library.Scheme = LibraryScheme
-        self.BuiltInThemes["Default"] = { 1, FinalTheme }
+        self.BuiltInThemes["Obsidian"] = { 1, FinalTheme }
 
         self.Library:UpdateColorsUsingRegistry()
     end
