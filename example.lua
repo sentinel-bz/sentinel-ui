@@ -139,7 +139,6 @@ Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProce
 	end
 end))
 
--- notifications: a couple of defaults + one short Time so the accent bar drain is easy to watch
 Library:Notify("Sentinel UI loaded")
 Library:Notify("RightControl toggles · End unloads")
 Library:Notify("Watch this accent bar drain over 6s", 6)

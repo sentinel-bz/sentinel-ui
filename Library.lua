@@ -98,6 +98,11 @@ local Library = {
 
 	KeybindRows = {},
 
+	SearchIndex = {}, -- { Text(lower), Row, Reveal, Tab, Record, Dimmed }
+	SearchBoxes = {}, -- groupbox/tabbox records { Chrome, Entries, Tab, Dimmed }
+	Searching = false,
+	SearchSnapshot = nil,
+
 	ScreenGui = nil,
 	ShowCursorBinding = string.sub(tostring({}), 8),
 }
@@ -826,6 +831,26 @@ local function applyTooltip(handle, info, instance)
 	end
 end
 
+-- record a searchable element. `self` is the groupbox/subtab (carries Reveal/Tab/Record), `row` is
+-- the element's dimmable Holder, `text` is its display label. Returns the entry so addons (KeyPicker)
+-- can append their own text to it.
+local function indexElement(self, row, text)
+	if not (row and self and self.Record) then
+		return
+	end
+	local entry = {
+		Text = tostring(text or ""):lower(),
+		Row = row,
+		Reveal = self.Reveal,
+		Tab = self.Tab,
+		Record = self.Record,
+		Dimmed = false,
+	}
+	table.insert(Library.SearchIndex, entry)
+	table.insert(self.Record.Entries, entry)
+	return entry
+end
+
 function Funcs:AddLabel(info, doesWrap)
 	if typeof(info) == "string" then
 		info = { Text = info, DoesWrap = doesWrap }
@@ -855,7 +880,8 @@ function Funcs:AddLabel(info, doesWrap)
 		TextWrapped = info.DoesWrap,
 	})
 
-	local Label = { Text = info.Text, Type = "Label", TextLabel = TextLabel, AddonContainer = nil }
+	local Label = { Text = info.Text, Type = "Label", TextLabel = TextLabel, Holder = Holder, AddonContainer = nil }
+	Label.SearchEntry = indexElement(self, Holder, info.Text)
 
 	-- fixed-height right strip (not fromScale, to avoid a circular size chain with the addon)
 	local Right = New("Frame", {
@@ -983,6 +1009,7 @@ function Funcs:AddButton(info, func)
 	end
 
 	local main = makeSub(info)
+	indexElement(self, Holder, info.Text)
 	Button.SetText = function(_, text)
 		main:SetText(text)
 	end
@@ -1081,6 +1108,8 @@ function Funcs:AddToggle(idx, info)
 	})
 	Toggle.AddonContainer = Right
 	Toggle.TextLabel = Label
+	Toggle.Holder = Holder
+	Toggle.SearchEntry = indexElement(self, Holder, info.Text)
 
 	function Toggle:Display()
 		Fill.Visible = Toggle.Value
@@ -1174,6 +1203,7 @@ function Funcs:AddInput(idx, info)
 
 	Input.Holder = Holder
 	Input.TextBox = Box
+	indexElement(self, Holder, info.Text)
 
 	function Input:OnChanged(func)
 		table.insert(Input.OnChangedFns, func)
@@ -1323,6 +1353,7 @@ function Funcs:AddSlider(idx, info)
 	})
 
 	Slider.Holder = Holder
+	indexElement(self, Holder, info.Text)
 
 	function Slider:Display()
 		local frac = (Slider.Max - Slider.Min) == 0 and 0 or (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
@@ -1466,6 +1497,7 @@ function Funcs:AddDropdown(idx, info)
 	})
 
 	Dropdown.Holder = Holder
+	indexElement(self, Holder, info.Text)
 
 	-- floating list (dump's Dropdown_1): outer(8,8,8) -> inner(38,38,38) -> items
 	local Menu = Library:AddContextMenu(DisplayOuter, function()
@@ -1898,6 +1930,10 @@ function BaseAddons:AddKeyPicker(idx, info)
 	KeyPicker:SetValue(info.Default)
 	Library.Options[idx] = KeyPicker
 	Library:AddKeybindRow(KeyPicker)
+	-- keypicker text is searchable via its parent element's entry (scope: main label + keypicker)
+	if self.SearchEntry and KeyPicker.Text then
+		self.SearchEntry.Text = self.SearchEntry.Text .. " " .. tostring(KeyPicker.Text):lower()
+	end
 	return self
 end
 
@@ -2190,7 +2226,7 @@ end
 --===================================================================--
 --// Groupbox / Tabbox / Tab                                         --
 --===================================================================--
-local function MakeGroupbox(side, name)
+local function MakeGroupbox(side, name, tab)
 	-- full-height box: the panel fills the column; content is top-aligned and the empty space below
 	-- the last element sits inside the border (reverted from round 5's content-sizing)
 	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
@@ -2212,10 +2248,11 @@ local function MakeGroupbox(side, name)
 		PaddingRight = UDim.new(0, 8),
 	})
 
+	local titleLabel
 	if name then
 		-- header cue is full FontColor brightness (vs the dimmer label color); underline is reserved
 		-- for the active tabbox section, so titles are not underlined
-		New("TextLabel", {
+		titleLabel = New("TextLabel", {
 			Parent = Content,
 			Text = name,
 			TextColor3 = "FontColor",
@@ -2227,11 +2264,19 @@ local function MakeGroupbox(side, name)
 		})
 	end
 
-	local Groupbox = { Container = Content, Holder = Outline, Type = "Groupbox" }
+	local Groupbox = { Container = Content, Holder = Outline, Type = "Groupbox", Tab = tab }
+	Groupbox.Reveal = function()
+		if tab then
+			tab:Show()
+		end
+	end
+	-- search block record: chrome dimmed when the whole box has zero matches
+	Groupbox.Record = { Chrome = { Outline, Inline, Body, titleLabel }, Entries = {}, Tab = tab, Dimmed = false }
+	table.insert(Library.SearchBoxes, Groupbox.Record)
 	return setmetatable(Groupbox, { __index = Funcs })
 end
 
-local function MakeTabbox(side)
+local function MakeTabbox(side, tab)
 	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
 	Outline.AutomaticSize = Enum.AutomaticSize.Y
 	Body.AutomaticSize = Enum.AutomaticSize.Y
@@ -2267,6 +2312,9 @@ local function MakeTabbox(side)
 	})
 
 	local Tabbox = { Tabs = {}, ActiveTab = nil, Holder = Outline, Body = Body }
+	-- one search record for the whole tabbox; its chrome dims only when every section has zero matches
+	Tabbox.Record = { Chrome = { Outline, Inline, Body }, Entries = {}, Tab = tab, Owner = Tabbox, Dimmed = false }
+	table.insert(Library.SearchBoxes, Tabbox.Record)
 
 	function Tabbox:AddTab(name)
 		-- underline is the active-section indicator only (the Underline frame below), so the text is plain
@@ -2304,7 +2352,14 @@ local function MakeTabbox(side)
 			PaddingBottom = UDim.new(0, 8),
 		})
 
-		local SubTab = { Container = Content, Button = SelectButton }
+		local SubTab = { Container = Content, Button = SelectButton, Tab = tab, Record = Tabbox.Record }
+		-- reveal = switch to this tab, then this section
+		SubTab.Reveal = function()
+			if tab then
+				tab:Show()
+			end
+			SubTab:Show()
+		end
 		setmetatable(SubTab, { __index = Funcs })
 
 		function SubTab:Show()
@@ -2332,6 +2387,137 @@ local function MakeTabbox(side)
 	end
 
 	return Tabbox
+end
+
+--===================================================================--
+--// Search                                                          --
+--===================================================================--
+-- Manual transparency fade (chosen over CanvasGroup to avoid adding nodes to the AutomaticSize
+-- chains). Each instance's original transparencies are snapshotted on first dim and restored exactly.
+local DIM_FACTOR = 0.62
+local DimProps = { "BackgroundTransparency", "TextTransparency", "TextStrokeTransparency", "ImageTransparency" }
+local DimState = {} -- instance -> { prop = originalValue } while dimmed
+
+local function dimInstance(inst, on)
+	if on then
+		if DimState[inst] then
+			return
+		end
+		local snap = {}
+		for _, prop in DimProps do
+			local ok, value = pcall(function()
+				return inst[prop]
+			end)
+			if ok and type(value) == "number" then
+				snap[prop] = value
+				pcall(function()
+					inst[prop] = value + (1 - value) * DIM_FACTOR
+				end)
+			end
+		end
+		DimState[inst] = snap
+	else
+		local snap = DimState[inst]
+		if not snap then
+			return
+		end
+		for prop, value in snap do
+			pcall(function()
+				inst[prop] = value
+			end)
+		end
+		DimState[inst] = nil
+	end
+end
+
+local function dimTree(root, on)
+	if not root then
+		return
+	end
+	dimInstance(root, on)
+	for _, child in root:GetChildren() do
+		dimTree(child, on)
+	end
+end
+
+local function dimChrome(record, on)
+	record.Dimmed = on
+	for _, inst in record.Chrome do
+		dimInstance(inst, on)
+	end
+end
+
+function Library:ResetSearch()
+	for _, entry in Library.SearchIndex do
+		dimTree(entry.Row, false)
+		entry.Dimmed = false
+	end
+	for _, record in Library.SearchBoxes do
+		dimChrome(record, false)
+	end
+	-- restore exact prior tab + sections
+	local snap = Library.SearchSnapshot
+	if snap then
+		for _, subtab in snap.Sections do
+			subtab:Show()
+		end
+		if snap.Tab then
+			snap.Tab:Show()
+		end
+	end
+	Library.Searching = false
+	Library.SearchSnapshot = nil
+end
+
+function Library:UpdateSearch(query, enterPressed)
+	query = tostring(query or ""):gsub("^%s*(.-)%s*$", "%1"):lower()
+
+	if query == "" then
+		Library:ResetSearch()
+		return
+	end
+
+	if not Library.Searching then
+		-- snapshot the active tab + each tabbox's active section on the first non-empty keystroke
+		local sections = {}
+		for _, record in Library.SearchBoxes do
+			if record.Owner and record.Owner.ActiveTab then
+				table.insert(sections, record.Owner.ActiveTab)
+			end
+		end
+		Library.SearchSnapshot = { Tab = Library.ActiveTab, Sections = sections }
+		Library.Searching = true
+	end
+
+	local firstMatch, activeHasMatch = nil, false
+	for _, entry in Library.SearchIndex do
+		local matched = entry.Text:find(query, 1, true) ~= nil
+		entry.Dimmed = not matched
+		dimTree(entry.Row, not matched)
+		if matched then
+			firstMatch = firstMatch or entry
+			if entry.Tab == Library.ActiveTab then
+				activeHasMatch = true
+			end
+		end
+	end
+
+	-- a box's chrome dims only when none of its own entries matched
+	for _, record in Library.SearchBoxes do
+		local anyMatch = false
+		for _, entry in record.Entries do
+			if not entry.Dimmed then
+				anyMatch = true
+				break
+			end
+		end
+		dimChrome(record, not anyMatch)
+	end
+
+	-- jump: only when the active tab has no match (so you stay put if your target is here), or on Enter
+	if firstMatch and ((not activeHasMatch) or enterPressed) and firstMatch.Reveal then
+		firstMatch.Reveal()
+	end
 end
 
 --===================================================================--
@@ -2364,13 +2550,13 @@ function Library:CreateWindow(windowInfo)
 		)
 	end
 
-	-- title bar drag handle
+	-- title bar drag handle; right ~165px excluded so it never overlaps the search box / footer
 	local DragHandle = New("TextButton", {
 		Parent = Shell.Body,
 		Text = "",
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(0, 0),
-		Size = UDim2.new(1, 0, 0, 16),
+		Size = UDim2.new(1, -165, 0, 16),
 		ZIndex = 5,
 	})
 	Library:MakeDraggable(MainOutline, DragHandle, true)
@@ -2389,6 +2575,46 @@ function Library:CreateWindow(windowInfo)
 			Interactable = false,
 		})
 	end
+
+	-- compact search box in the title bar, left of the footer. The TextBox sinks input (so a click
+	-- focuses it without reaching the DragHandle), and the DragHandle rect already excludes this area.
+	local SearchOuter = New("Frame", {
+		Parent = Shell.Body,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -36, 0, 1),
+		Size = UDim2.fromOffset(120, 14),
+		ZIndex = 6,
+	})
+	local SearchBox = New("TextBox", {
+		Parent = SearchOuter,
+		Text = "",
+		PlaceholderText = "Search...",
+		PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0.5,
+		BackgroundColor3 = "Element",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		ClearTextOnFocus = false,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextSize = 12,
+		ZIndex = 6,
+	})
+	New("UIPadding", { Parent = SearchBox, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 4) })
+	Library.SearchBox = SearchBox
+
+	Library:GiveSignal(SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Library:UpdateSearch(SearchBox.Text)
+	end))
+	Library:GiveSignal(SearchBox.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			Library:UpdateSearch(SearchBox.Text, true)
+		end
+	end))
 
 	-- accent strip + tab/content region (dump's Accent at y=18)
 	local AccentRegion = New("Frame", {
@@ -2566,20 +2792,16 @@ function Library:CreateWindow(windowInfo)
 		end
 
 		function Tab:AddLeftGroupbox(boxName)
-			local box = MakeGroupbox(LeftSide, boxName)
-			box.Tab = Tab
-			return box
+			return MakeGroupbox(LeftSide, boxName, Tab)
 		end
 		function Tab:AddRightGroupbox(boxName)
-			local box = MakeGroupbox(RightSide, boxName)
-			box.Tab = Tab
-			return box
+			return MakeGroupbox(RightSide, boxName, Tab)
 		end
 		function Tab:AddLeftTabbox()
-			return MakeTabbox(LeftSide)
+			return MakeTabbox(LeftSide, Tab)
 		end
 		function Tab:AddRightTabbox()
-			return MakeTabbox(RightSide)
+			return MakeTabbox(RightSide, Tab)
 		end
 
 		TabButton.MouseButton1Click:Connect(function()
@@ -2857,6 +3079,11 @@ function Library:Unload()
 	table.clear(Library.Registry)
 	table.clear(Library.Tabs)
 	table.clear(Library.KeybindRows)
+	table.clear(Library.SearchIndex)
+	table.clear(Library.SearchBoxes)
+	table.clear(DimState)
+	Library.Searching = false
+	Library.SearchSnapshot = nil
 	getgenv().Library = nil
 end
 
