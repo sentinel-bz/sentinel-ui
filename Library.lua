@@ -27,6 +27,7 @@ local RunService = Services.RunService
 local TweenService = Services.TweenService
 local Players = Services.Players
 local TextService = Services.TextService
+local GuiService = Services.GuiService
 
 local getgenv = getgenv or function()
 	return shared
@@ -2756,7 +2757,10 @@ function Library:CreateWindow(windowInfo)
 			pcall(RunService.UnbindFromRenderStep, RunService, binding)
 			RunService:BindToRenderStep(binding, Enum.RenderPriority.Last.Value, function()
 				UserInputService.MouseIconEnabled = not Library.ShowCustomCursor
-				Cursor.Position = UDim2.fromOffset(Mouse.X, Mouse.Y)
+				-- GetMouseLocation includes the topbar inset; subtract it so the arrow tip lands on the real click point
+				local loc = UserInputService:GetMouseLocation()
+				local inset = GuiService:GetGuiInset()
+				Cursor.Position = UDim2.fromOffset(loc.X - inset.X, loc.Y - inset.Y)
 				Cursor.Visible = Library.ShowCustomCursor
 				if not (Library.Toggled and ScreenGui and ScreenGui.Parent) then
 					UserInputService.MouseIconEnabled = OriginalMouseIconEnabled
