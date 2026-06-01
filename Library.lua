@@ -857,6 +857,9 @@ function Library:Notify(info, time)
 		BorderColor3 = "ElementBorder",
 		BorderSizePixel = 1,
 		AutomaticSize = Enum.AutomaticSize.Y,
+		-- centered so the 2px slack splits 1px/1px (even dark frame) instead of all landing on the right edge
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0),
 		Size = UDim2.new(1, -2, 0, 0),
 		ZIndex = 200,
 	})
@@ -922,7 +925,7 @@ function Library:Notify(info, time)
 		ZIndex = 202,
 	})
 
-	local handle = { Object = outer, AccentBar = bar, TitleLabel = titleLabel, BodyLabel = bodyLabel }
+	local handle = { Object = outer, Inner = inner, AccentBar = bar, TitleLabel = titleLabel, BodyLabel = bodyLabel }
 
 	if not persist then
 		local drain = TweenService:Create(
