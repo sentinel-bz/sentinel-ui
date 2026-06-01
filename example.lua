@@ -14,6 +14,7 @@ local Window = Library:CreateWindow({
 	Footer = "DEV",
 	Center = true,
 	ShowCustomCursor = true,
+	NotifySide = "Left",
 	ToggleKeybind = Enum.KeyCode.RightControl,
 })
 

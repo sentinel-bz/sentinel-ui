@@ -119,6 +119,7 @@ local Library = {
 
 	ToggleKeybind = Enum.KeyCode.RightControl,
 	ShowCustomCursor = false,
+	NotifySide = "Left",
 
 	TweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 
@@ -472,7 +473,7 @@ do
 		AnchorPoint = Vector2.new(0, 0),
 		BackgroundTransparency = 1,
 		Image = "rbxasset://textures/Cursors/KeyboardMouse/ArrowCursor.png",
-		ImageColor3 = "Accent",
+		ImageColor3 = "White",
 		Size = UDim2.fromOffset(18, 18),
 		Visible = false,
 		ZIndex = 11000,
@@ -752,7 +753,24 @@ function Library:AddTooltip(infoStr, hoverInstance)
 	return tip
 end
 
-local NotifyHolder
+local NotifyHolder, NotifyLayout
+local function notifyOnLeft()
+	-- lenient: "Left"/"left"/"LeftSide" all count as left, anything else is right
+	return tostring(Library.NotifySide):lower():sub(1, 1) == "l"
+end
+local function positionNotifyHolder()
+	if not NotifyHolder then
+		return
+	end
+	local left = notifyOnLeft()
+	NotifyHolder.AnchorPoint = Vector2.new(left and 0 or 1, 0)
+	NotifyHolder.Position = left and UDim2.fromOffset(16, 16) or UDim2.new(1, -16, 0, 16)
+	NotifyLayout.HorizontalAlignment = left and Enum.HorizontalAlignment.Left or Enum.HorizontalAlignment.Right
+end
+function Library:SetNotifySide(side)
+	Library.NotifySide = side
+	positionNotifyHolder()
+end
 function Library:Notify(info, time)
 	local title, body, persist
 	if typeof(info) == "table" then
@@ -781,18 +799,17 @@ function Library:Notify(info, time)
 	if not NotifyHolder then
 		NotifyHolder = New("Frame", {
 			Parent = ScreenGui,
-			AnchorPoint = Vector2.new(0, 0),
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(16, 16),
 			Size = UDim2.new(0, 260, 1, -32),
 			ZIndex = 200,
 		})
-		New("UIListLayout", {
+		NotifyLayout = New("UIListLayout", {
 			Parent = NotifyHolder,
-			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			Padding = UDim.new(0, 8),
 		})
 	end
+	positionNotifyHolder()
+	local onLeft = notifyOnLeft()
 
 	local outer = New("Frame", {
 		Parent = NotifyHolder,
@@ -869,13 +886,13 @@ function Library:Notify(info, time)
 		})
 	end
 
-	-- left edge fixed, width shrinks so the bar empties toward the LEFT screen edge
+	-- anchored to the notify side's edge so the bar empties toward the nearest screen edge
 	local bar = New("Frame", {
 		Parent = inner,
 		BackgroundColor3 = "Accent",
 		BorderColor3 = "Border",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, 0),
+		AnchorPoint = Vector2.new(onLeft and 0 or 1, 1),
+		Position = onLeft and UDim2.new(0, 0, 1, 0) or UDim2.new(1, 0, 1, 0),
 		Size = UDim2.new(1, 0, 0, 2),
 		ZIndex = 202,
 	})
@@ -2599,12 +2616,14 @@ function Library:CreateWindow(windowInfo)
 		Position = UDim2.fromOffset(100, 100),
 		ToggleKeybind = Enum.KeyCode.RightControl,
 		ShowCustomCursor = false,
+		NotifySide = "Left",
 		Resizable = false,
 		Center = false,
 	})
 
 	Library.ToggleKeybind = windowInfo.ToggleKeybind
 	Library.ShowCustomCursor = windowInfo.ShowCustomCursor
+	Library.NotifySide = windowInfo.NotifySide
 
 	local Shell = MakeWindowShell(ScreenGui, windowInfo.Size, windowInfo.Position, windowInfo.Title)
 	local MainOutline = Shell.Outline
