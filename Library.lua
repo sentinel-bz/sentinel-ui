@@ -62,6 +62,12 @@ local Scheme = {
 	Pop = Color3.fromRGB(50, 50, 50),
 	White = Color3.fromRGB(255, 255, 255),
 	Divider = Color3.fromRGB(32, 32, 38),
+
+	-- ThemeManager master inputs; the 15 shades above are re-derived from these (deriveScheme)
+	MainColor = Color3.fromRGB(38, 38, 38),
+	AccentColor = Color3.fromRGB(195, 33, 72),
+	BackgroundColor = Color3.fromRGB(20, 20, 20),
+	OutlineColor = Color3.fromRGB(56, 56, 56),
 }
 
 local ColorProps = {
@@ -73,6 +79,39 @@ local ColorProps = {
 	PlaceholderColor3 = true,
 	Color = true,
 }
+
+-- each shade is a fixed per-channel offset from one of ThemeManager's 5 masters, calibrated so the Sentinel master defaults reproduce the current 15-shade palette byte-for-byte
+local MasterShades = {
+	{ "Accent", "AccentColor", 0, 0, 0 },
+	{ "FontColor", "FontColor", 0, 0, 0 },
+	{ "DimColor", "FontColor", -30, -30, -30 },
+	{ "Body", "BackgroundColor", 0, 0, 0 },
+	{ "Dark", "BackgroundColor", -12, -12, -12 },
+	{ "Inline", "BackgroundColor", 10, 10, 10 },
+	{ "Outline", "BackgroundColor", -10, -10, -10 },
+	{ "ElementFill", "BackgroundColor", 2, 2, 2 },
+	{ "DarkBorder", "BackgroundColor", -1, -1, -1 },
+	{ "Element", "MainColor", 0, 0, 0 },
+	{ "Pop", "MainColor", 12, 12, 12 },
+	{ "Border", "OutlineColor", -56, -56, -56 },
+	{ "ElementBorder", "OutlineColor", 0, 0, 0 },
+	{ "Divider", "OutlineColor", -24, -24, -18 },
+}
+local function byteOf(channel)
+	return math.floor(channel * 255 + 0.5)
+end
+local function deriveScheme()
+	for _, d in MasterShades do
+		local master = Scheme[d[2]]
+		if typeof(master) == "Color3" then
+			Scheme[d[1]] = Color3.fromRGB(
+				math.clamp(byteOf(master.R) + d[3], 0, 255),
+				math.clamp(byteOf(master.G) + d[4], 0, 255),
+				math.clamp(byteOf(master.B) + d[5], 0, 255)
+			)
+		end
+	end
+end
 
 local Library = {
 	Version = "1.0.0",
@@ -159,6 +198,7 @@ function Library:RemoveFromRegistry(instance)
 end
 
 function Library:UpdateColorsUsingRegistry()
+	deriveScheme()
 	for instance, properties in Library.Registry do
 		for property, key in properties do
 			local value = Scheme[key]
@@ -172,8 +212,32 @@ function Library:UpdateColorsUsingRegistry()
 end
 
 function Library:SetAccent(color)
-	Scheme.Accent = color
+	-- set the master, not the shade — deriveScheme rebuilds Scheme.Accent from AccentColor
+	Scheme.AccentColor = color
 	Library:UpdateColorsUsingRegistry()
+end
+
+function Library:SetFont(font)
+	if typeof(font) == "EnumItem" then
+		font = Font.fromEnum(font)
+	end
+	if typeof(font) ~= "Font" then
+		return
+	end
+	Library.Font = font
+	Templates.TextLabel.FontFace = font
+	Templates.TextButton.FontFace = font
+	Templates.TextBox.FontFace = font
+	if not Library.ScreenGui then
+		return
+	end
+	for _, inst in Library.ScreenGui:GetDescendants() do
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+			pcall(function()
+				inst.FontFace = font
+			end)
+		end
+	end
 end
 
 --// Helpers \\--

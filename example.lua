@@ -115,7 +115,16 @@ SecB:AddToggle("SecBToggle", { Text = "tracers" })
 Library:SetWatermark("SENTINEL.bz | DEV")
 local PlayerList = Library:CreatePlayerList()
 
---// config save/load
+--// theming (ThemeManager drives 5 masters; the library derives its 15 shades from them)
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/ThemeManager.lua"))()
+ThemeManager:SetLibrary(Library)
+ThemeManager:SetFolder("sentinel/configs")
+ThemeManager.BuiltInThemes["Sentinel"] =
+	{ 0, { FontColor = "c8c8c8", MainColor = "262626", AccentColor = "c32148", BackgroundColor = "141414", OutlineColor = "383838" } }
+ThemeManager.DefaultTheme = "Sentinel"
+ThemeManager:ApplyToTab(Window:AddTab("Themes"))
+
+--// config save/load (after ThemeManager so the theme options exist; IgnoreThemeSettings stops double-save)
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
@@ -134,7 +143,7 @@ end)
 -- Unload on End (tracked via GiveSignal so it's cleaned up with everything else)
 local UserInputService = game:GetService("UserInputService")
 Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not gameProcessed and input.KeyCode == Enum.KeyCode.End then
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.Delete then
 		Library:Unload()
 	end
 end))
