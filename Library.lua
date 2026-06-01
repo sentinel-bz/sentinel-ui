@@ -45,7 +45,8 @@ local OriginalMouseIconEnabled = UserInputService.MouseIconEnabled
 
 local PIXEL_FONT = "rbxassetid://12187371840"
 -- default matches ThemeManager's "Jura" option so the out-of-box font == selecting Jura in the dropdown
-local FONT = Font.fromEnum(Enum.Font.Jura)
+local DEFAULT_FONT = "Jura"
+local FONT = Font.fromEnum(Enum.Font[DEFAULT_FONT])
 
 --// Theme \\--
 local Scheme = {
@@ -247,6 +248,24 @@ function Library:SetFont(font)
 		if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
 			pcall(function()
 				inst.FontFace = font
+			end)
+		end
+	end
+end
+
+function Library:SetFontSize(size)
+	size = math.clamp(math.floor(tonumber(size) or 12), 6, 48)
+	Library.FontSize = size
+	Templates.TextLabel.TextSize = size
+	Templates.TextButton.TextSize = size
+	Templates.TextBox.TextSize = size
+	if not Library.ScreenGui then
+		return
+	end
+	for _, inst in Library.ScreenGui:GetDescendants() do
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+			pcall(function()
+				inst.TextSize = size
 			end)
 		end
 	end
@@ -1512,6 +1531,23 @@ function Funcs:AddDropdown(idx, info)
 		Visible = true,
 	})
 
+	-- FontFace is ThemeManager's font picker; guarantee the pixel "Sentinel" option + Jura default here,
+	-- before ThemeManager wires FontFace:OnChanged, so the fresh-launch font is Jura regardless of any
+	-- caller-side injection ordering (ThemeManager's "Code" default would otherwise win the immediate fire)
+	if idx == "FontFace" and not info.Multi then
+		local function ensure(name, atFront)
+			for _, v in info.Values do
+				if v == name then
+					return
+				end
+			end
+			table.insert(info.Values, atFront and 1 or #info.Values + 1, name)
+		end
+		ensure("Sentinel", true)
+		ensure(DEFAULT_FONT, false)
+		info.Default = DEFAULT_FONT
+	end
+
 	local Dropdown = {
 		Values = info.Values,
 		Value = info.Multi and {} or nil,
@@ -1582,31 +1618,49 @@ function Funcs:AddDropdown(idx, info)
 		return { 0, DisplayOuter.AbsoluteSize.Y + 1 }
 	end, 1)
 
+	-- backing auto-sizes to the full item content (dump's Dropdown_1 is AutomaticSize.Y), so the dark
+	-- panel covers every option at any scroll position instead of only the first viewport
 	local ListOuter = New("Frame", {
 		Parent = Menu.Menu,
 		BackgroundColor3 = "Dark",
 		BorderColor3 = "DarkBorder",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 50,
+	})
+	New("UIPadding", {
+		Parent = ListOuter,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 2),
 	})
 	local ListInner = New("Frame", {
 		Parent = ListOuter,
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
 		BorderSizePixel = 1,
-		Position = UDim2.fromOffset(2, 2),
-		Size = UDim2.new(1, -4, 1, -4),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 50,
+	})
+	New("UIPadding", {
+		Parent = ListInner,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 2),
 	})
 	local ItemList = New("Frame", {
 		Parent = ListInner,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(2, 2),
-		Size = UDim2.new(1, -4, 1, -4),
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		ZIndex = 50,
 	})
 	New("UIListLayout", { Parent = ItemList, Padding = UDim.new(0, 2) })
 	New("UIPadding", { Parent = ItemList, PaddingBottom = UDim.new(0, 4) })
+	Dropdown.ListBacking = ListOuter
 
 	local ItemButtons = {}
 
@@ -2075,16 +2129,19 @@ function BaseAddons:AddColorPicker(idx, info)
 		Size = UDim2.new(1, 0, 1, -50),
 		ZIndex = 51,
 	})
+	-- base hue layer: a Color3 literal (NOT a "White" scheme key) so UpdateColorsUsingRegistry can't
+	-- reset it to white; Display() keeps it at the current full-sat hue. White/black overlays sit on top.
 	local SatMap = New("TextButton", {
 		Parent = SatOuter,
 		Text = "",
-		BackgroundColor3 = "White",
+		BackgroundColor3 = HSVToColor(H, 1, 1),
 		BorderColor3 = "ElementBorder",
 		BorderSizePixel = 1,
 		Position = UDim2.fromOffset(2, 2),
 		Size = UDim2.new(1, -4, 1, -4),
 		ZIndex = 51,
 	})
+	ColorPicker.SatMap = SatMap
 	local SatGradientWhite = New("Frame", {
 		Parent = SatMap,
 		BackgroundColor3 = "White",

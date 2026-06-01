@@ -115,20 +115,30 @@ SecB:AddToggle("SecBToggle", { Text = "tracers" })
 Library:SetWatermark("SENTINEL.bz | DEV")
 local PlayerList = Library:CreatePlayerList()
 
---// theming (ThemeManager drives 5 masters; the library derives its 15 shades from them)
+--// theming
 local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/ThemeManager.lua"))()
 ThemeManager:SetLibrary(Library)
 ThemeManager:SetFolder("sentinel")
 ThemeManager.BuiltInThemes["Sentinel"] =
 	{ 0, { FontColor = "c8c8c8", MainColor = "262626", AccentColor = "c32148", BackgroundColor = "141414", OutlineColor = "383838" } }
 ThemeManager.DefaultTheme = "Sentinel"
-ThemeManager:ApplyToTab(Window:AddTab("Themes"))
+local ThemesTab = Window:AddTab("Themes")
+ThemeManager:ApplyToTab(ThemesTab)
+-- the FontFace dropdown auto-includes the pixel "Sentinel" option and defaults to Jura (handled in the library)
 
--- add our pixel font as a selectable "Sentinel" option; default the picker to Juro
-Library.Options.FontFace:SetValues({ "Sentinel", "BuilderSans", "Code", "Fantasy", "Gotham", "Jura", "Roboto", "RobotoMono", "SourceSans" })
-Library.Options.FontFace:SetValue("Jura")
+local InterfaceBox = ThemesTab:AddRightGroupbox("Interface")
+InterfaceBox:AddSlider("FontSize", {
+	Text = "Font size",
+	Default = 12,
+	Min = 8,
+	Max = 24,
+	Rounding = 0,
+	Callback = function(value)
+		Library:SetFontSize(value)
+	end,
+})
 
---// config save/load (after ThemeManager so the theme options exist; IgnoreThemeSettings stops double-save)
+--// config save/load
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
@@ -144,7 +154,7 @@ Library.Options["MySlider"]:OnChanged(function(value)
 	print("MySlider observed:", value)
 end)
 
--- Unload on End (tracked via GiveSignal so it's cleaned up with everything else)
+-- Unload on End
 local UserInputService = game:GetService("UserInputService")
 Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if not gameProcessed and input.KeyCode == Enum.KeyCode.Delete then
