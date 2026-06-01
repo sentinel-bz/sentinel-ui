@@ -2113,6 +2113,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 		KeyPicker.Value = CanonicalKeyName(bind)
 		KeyPicker:Display()
 		KeyPicker:Update()
+		Library:SafeCallback(KeyPicker.ChangedCallback, KeyPicker.Value, KeyPicker.Bind)
 	end
 
 	local function fireState()
@@ -3258,6 +3259,12 @@ function Library:UpdateKeybindRow(keyPicker)
 	row.Key.Text = keyPicker.Value == "None" and "none" or Library:GetKeyString(keyPicker.Bind or keyPicker.Value)
 	row.Mode.Text = keyPicker.Mode:lower()
 	row.State.Text = tostring(keyPicker:GetState())
+end
+
+function Library:SetKeybindFrameVisible(visible)
+	if KeybindShell and KeybindShell.Outline then
+		KeybindShell.Outline.Visible = visible
+	end
 end
 
 function Library:OnUnload(callback)
