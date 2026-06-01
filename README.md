@@ -1,56 +1,34 @@
 # sentinel-ui
 
-A self-contained Luau UI library that recreates the "calcium.supply" cheat-menu *chrome* —
-interface only, no gameplay logic. It reproduces the dump's exact layered-border visual style
-(outline → accent → translucent fill, crimson accent `Color3.fromRGB(195, 33, 72)`, 12px stroked
-font) while making everything data-driven.
+a luau ui library for roblox — crimson menu, dragging, tabs, the usual stuff.
 
-## Usage
+## usage
 
 ```lua
-if getgenv().Library and getgenv().Library.Unload then
-    pcall(function() getgenv().Library:Unload() end)
-end
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/Library.lua"))()
 
-local Library = loadstring(game:HttpGet(".../Library.lua"))()
+local Window = Library:CreateWindow({ Title = "sentinel", Footer = "DEV" })
+local Tab    = Window:AddTab("tab")
+local Box    = Tab:AddLeftGroupbox("section")
 
-local Window = Library:CreateWindow({ Title = "calcium.supply", Footer = "DEV" })
-local Tab    = Window:AddTab("Aimbot")
-local Box    = Tab:AddLeftGroupbox("Section1")
-
-Box:AddToggle("MyToggle", { Text = "Toggle With All", Default = false, Callback = function(v) end })
-Box:AddSlider("MySlider", { Text = "Slider", Default = 90, Min = 0, Max = 100, Callback = function(v) end })
-Box:AddDropdown("MyDrop", { Values = { "Item1", "Item2" }, Multi = true, Callback = function(v) end })
-Box:AddInput("MyInput", { Placeholder = "type here...", Callback = function(t) end })
-Box:AddButton({ Text = "Button", Func = function() end })
-
-local Tog = Box:AddToggle("WithAddons", { Text = "with addons" })
-Tog:AddKeyPicker("MyKey", { Default = "LeftControl", Mode = "Toggle", Callback = function(s) end })
-Tog:AddColorPicker("MyColor", { Default = Color3.fromRGB(195, 33, 72), Callback = function(c) end })
+Box:AddToggle("MyToggle", { Text = "toggle", Default = false, Callback = function(v) end })
+Box:AddSlider("MySlider", { Text = "slider", Default = 90, Min = 0, Max = 100, Callback = function(v) end })
+Box:AddDropdown("MyDrop", { Values = { "a", "b" }, Multi = true, Callback = function(v) end })
+Box:AddButton({ Text = "button", Func = function() end })
 ```
 
-See [`example.lua`](example.lua) for every component type.
+see [`example.lua`](example.lua) for every component.
 
-## Components
+## components
 
-Window (drag, toggle keybind, optional custom cursor) · Tabs · Groupboxes · Tabboxes (section
-switching) · Toggle · Slider · Dropdown (single/multi, floating list) · Input · Button · Label ·
-Divider · KeyPicker (Always/Toggle/Hold) · ColorPicker (SV/hue/alpha, RGBA round-trip) · Tooltip ·
-Watermark · PlayerList · KeybindList.
+window · tabs · groupboxes · tabboxes · toggle · slider · dropdown · input · button · label · divider · keypicker · colorpicker · tooltip · watermark · playerlist · keybindlist.
 
-## State & cleanup
+## state & cleanup
 
-- `Library.Toggles[idx]`, `Library.Options[idx]` registries; `:SetValue`/`:GetValue`/`:OnChanged`
-  on every handle.
-- Single connection registry: `Library:GiveSignal`, `Library:OnUnload`, `Library:Unload`.
-  `Unload()` runs teardown callbacks, disconnects all signals, unbinds the cursor render step,
-  restores `MouseIconEnabled`, destroys the ScreenGui, and clears `getgenv().Library`.
-- Re-running the script auto-unloads any prior instance.
+- `Library.Toggles[idx]` / `Library.Options[idx]`; `:SetValue` / `:GetValue` / `:OnChanged` on each handle.
+- one connection registry: `Library:GiveSignal` / `OnUnload` / `Unload`. unload disconnects everything, destroys the gui, clears `getgenv().Library`.
+- re-running auto-unloads the previous instance.
 
-Pure Luau, single file; runs as an executor script.
+## config + themes
 
-## Config save/load
-
-The library mirrors Obsidian's API, so Obsidian's `SaveManager` works against it unmodified. A
-verbatim copy is vendored under [`dependencies/`](dependencies/) (MIT, © deividcomsono — see
-[`dependencies/LICENSE`](dependencies/LICENSE)). See [`example.lua`](example.lua) for the wiring.
+obsidian's savemanager and thememanager work against it unmodified, vendored under [`dependencies/`](dependencies/). see [`example.lua`](example.lua).
