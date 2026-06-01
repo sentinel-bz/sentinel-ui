@@ -27,7 +27,6 @@ local RunService = Services.RunService
 local TweenService = Services.TweenService
 local Players = Services.Players
 local TextService = Services.TextService
-local GuiService = Services.GuiService
 
 local getgenv = getgenv or function()
 	return shared
@@ -465,22 +464,47 @@ Library:GiveSignal(ScreenGui.DescendantRemoving:Connect(function(instance)
 	end
 end))
 
--- Obsidian-style arrow; tip at the top-left so AnchorPoint(0,0) + Position=mouse lands the tip on the cursor.
--- ImageColor3 is a registry key so SetAccent recolors it.
-local Cursor
+-- Drawing-based cursor: renders in true screen space (no GuiInset / ScreenGui), and the tip is an
+-- explicit point (PointA) so it lands exactly on the OS cursor used for hover/click. Guarded for
+-- executors without Drawing (falls back to the system cursor).
+local Cursor, CursorOutline
 do
-	Cursor = New("ImageLabel", {
-		Parent = ScreenGui,
-		AnchorPoint = Vector2.new(0, 0),
-		BackgroundTransparency = 1,
-		Image = "rbxasset://textures/Cursors/KeyboardMouse/ArrowCursor.png",
-		ImageColor3 = "White",
-		Size = UDim2.fromOffset(18, 18),
-		Visible = false,
-		ZIndex = 11000,
-	})
+	if Drawing then
+		Cursor = Drawing.new("Triangle")
+		Cursor.Filled = true
+		Cursor.Thickness = 1
+		Cursor.Color = Color3.fromRGB(255, 255, 255)
+		Cursor.Visible = false
+		Cursor.ZIndex = 11000
+		CursorOutline = Drawing.new("Triangle")
+		CursorOutline.Filled = false
+		CursorOutline.Thickness = 1
+		CursorOutline.Color = Color3.fromRGB(0, 0, 0)
+		CursorOutline.Visible = false
+		CursorOutline.ZIndex = 11001
+	end
 end
 Library.Cursor = Cursor
+
+local function drawCursor(visible)
+	if not Cursor then
+		return
+	end
+	if visible then
+		local m = UserInputService:GetMouseLocation()
+		local a = Vector2.new(m.X, m.Y)
+		local b = Vector2.new(m.X + 14, m.Y + 5)
+		local c = Vector2.new(m.X + 5, m.Y + 14)
+		Cursor.PointA, Cursor.PointB, Cursor.PointC = a, b, c
+		if CursorOutline then
+			CursorOutline.PointA, CursorOutline.PointB, CursorOutline.PointC = a, b, c
+		end
+	end
+	Cursor.Visible = visible
+	if CursorOutline then
+		CursorOutline.Visible = visible
+	end
+end
 
 function Library:MakeDraggable(ui, dragFrame, isMainWindow)
 	local startPos, framePos
@@ -2756,15 +2780,12 @@ function Library:CreateWindow(windowInfo)
 			local binding = Library.ShowCursorBinding
 			pcall(RunService.UnbindFromRenderStep, RunService, binding)
 			RunService:BindToRenderStep(binding, Enum.RenderPriority.Last.Value, function()
-				UserInputService.MouseIconEnabled = not Library.ShowCustomCursor
-				-- GetMouseLocation includes the topbar inset; subtract it so the arrow tip lands on the real click point
-				local loc = UserInputService:GetMouseLocation()
-				local inset = GuiService:GetGuiInset()
-				Cursor.Position = UDim2.fromOffset(loc.X - inset.X, loc.Y - inset.Y)
-				Cursor.Visible = Library.ShowCustomCursor
+				local show = Library.ShowCustomCursor and Cursor ~= nil
+				UserInputService.MouseIconEnabled = not show
+				drawCursor(show)
 				if not (Library.Toggled and ScreenGui and ScreenGui.Parent) then
 					UserInputService.MouseIconEnabled = OriginalMouseIconEnabled
-					Cursor.Visible = false
+					drawCursor(false)
 					RunService:UnbindFromRenderStep(binding)
 				end
 			end)
@@ -3140,6 +3161,16 @@ function Library:Unload()
 	end)
 
 	UserInputService.MouseIconEnabled = OriginalMouseIconEnabled
+
+	-- Drawing objects aren't GUI, so ScreenGui:Destroy() won't clean them
+	pcall(function()
+		if Cursor then
+			Cursor:Remove()
+		end
+		if CursorOutline then
+			CursorOutline:Remove()
+		end
+	end)
 
 	if ScreenGui then
 		ScreenGui:Destroy()
