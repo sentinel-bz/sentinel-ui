@@ -8,7 +8,6 @@ if getgenv and getgenv().Library and getgenv().Library.Unload then
 	end)
 end
 
---// Executor bootstrap \\--
 local cloneref = cloneref or clonereference or function(instance)
 	return instance
 end
@@ -44,11 +43,9 @@ local Mouse = cloneref(LocalPlayer:GetMouse())
 local OriginalMouseIconEnabled = UserInputService.MouseIconEnabled
 
 local PIXEL_FONT = "rbxassetid://12187371840"
--- default matches ThemeManager's "Jura" option so the out-of-box font == selecting Jura in the dropdown
 local DEFAULT_FONT = "Jura"
 local FONT = Font.fromEnum(Enum.Font[DEFAULT_FONT])
 
---// Theme \\--
 local Scheme = {
 	Border = Color3.fromRGB(0, 0, 0),
 	Outline = Color3.fromRGB(10, 10, 10),
@@ -66,7 +63,6 @@ local Scheme = {
 	White = Color3.fromRGB(255, 255, 255),
 	Divider = Color3.fromRGB(32, 32, 38),
 
-	-- ThemeManager master inputs; the 15 shades above are re-derived from these (deriveScheme)
 	MainColor = Color3.fromRGB(38, 38, 38),
 	AccentColor = Color3.fromRGB(195, 33, 72),
 	BackgroundColor = Color3.fromRGB(20, 20, 20),
@@ -83,7 +79,6 @@ local ColorProps = {
 	Color = true,
 }
 
--- each shade is a fixed per-channel offset from one of ThemeManager's 5 masters, calibrated so the Sentinel master defaults reproduce the current 15-shade palette byte-for-byte
 local MasterShades = {
 	{ "Accent", "AccentColor", 0, 0, 0 },
 	{ "FontColor", "FontColor", 0, 0, 0 },
@@ -140,8 +135,8 @@ local Library = {
 
 	KeybindRows = {},
 
-	SearchIndex = {}, -- { Text(lower), Row, Reveal, Tab, Record, Dimmed }
-	SearchBoxes = {}, -- groupbox/tabbox records { Chrome, Entries, Tab, Dimmed }
+	SearchIndex = {},
+	SearchBoxes = {},
 	Searching = false,
 	SearchSnapshot = nil,
 
@@ -149,7 +144,6 @@ local Library = {
 	ShowCursorBinding = string.sub(tostring({}), 8),
 }
 
---// Factory \\--
 local Templates = {
 	Frame = { BorderSizePixel = 0 },
 	ScrollingFrame = { BorderSizePixel = 0 },
@@ -215,7 +209,6 @@ function Library:UpdateColorsUsingRegistry()
 end
 
 function Library:SetAccent(color)
-	-- set the master, not the shade — deriveScheme rebuilds Scheme.Accent from AccentColor
 	Scheme.AccentColor = color
 	Library:UpdateColorsUsingRegistry()
 end
@@ -225,7 +218,6 @@ function Library:SetFont(font)
 		if font == "Sentinel" then
 			font = Font.new(PIXEL_FONT)
 		else
-			-- resolve a font name the same way ThemeManager would (Enum.Font[name]); invalid -> no-op
 			local ok, resolved = pcall(function()
 				return Font.fromEnum(Enum.Font[font])
 			end)
@@ -271,7 +263,6 @@ function Library:SetFontSize(size)
 	end
 end
 
---// Helpers \\--
 local function IsMouseInput(input, includeM2)
 	return input.UserInputType == Enum.UserInputType.MouseButton1
 		or (includeM2 == true and input.UserInputType == Enum.UserInputType.MouseButton2)
@@ -373,8 +364,6 @@ function Library:GetKeyString(key)
 	return tostring(key):lower()
 end
 
---// Layered builders \\--
--- Window idiom from the dump: outline(10,10,10) -> accent(crimson) -> translucent body(20,20,20 @0.76).
 local function MakeWindowShell(parent, size, position, titleText)
 	local Outline = New("Frame", {
 		Parent = parent,
@@ -424,7 +413,6 @@ local function MakeWindowShell(parent, size, position, titleText)
 	return { Outline = Outline, Accent = Accent, Body = Body, Title = Title }
 end
 
--- Panel idiom from the dump: outline(10,10,10) -> inline(30,30,30) -> body(20,20,20).
 local function MakePanel(parent, size, position)
 	local Outline = New("Frame", {
 		Parent = parent,
@@ -451,7 +439,6 @@ local function MakePanel(parent, size, position)
 	return Outline, Inline, Body
 end
 
---// ScreenGui \\--
 local function ParentUI(ui)
 	pcall(protectgui, ui)
 	local ok = pcall(function()
@@ -477,7 +464,6 @@ ScreenGui.DescendantRemoving:Connect(function(instance)
 	end
 end)
 
---// Custom cursor (crosshair) \\--
 local Cursor
 do
 	Cursor = New("Frame", {
@@ -515,7 +501,6 @@ do
 	})
 end
 
---// Dragging \\--
 function Library:MakeDraggable(ui, dragFrame, isMainWindow)
 	local startPos, framePos
 	local dragging = false
@@ -599,7 +584,6 @@ function Library:MakeResizable(ui, dragFrame, minSize, callback)
 	end))
 end
 
---// Context menus / popups (dropdown list, colorpicker, keypicker modes) \\--
 local CurrentMenu
 function Library:AddContextMenu(holder, size, offset, list)
 	local Menu
@@ -695,8 +679,6 @@ Library:GiveSignal(UserInputService.InputBegan:Connect(function(input)
 	end
 end))
 
---// Tooltip \\--
--- dump's Tooltip: outer(8,8,8) -> inner(38,38,38, 1px 56,56,56) -> label, auto-sized via a padding chain (no relative sizes, so it can't collapse)
 local TooltipFrame = New("Frame", {
 	Parent = ScreenGui,
 	BackgroundColor3 = "Dark",
@@ -750,8 +732,6 @@ function Library:AddTooltip(infoStr, hoverInstance)
 		if CurrentHover == hoverInstance or (CurrentMenu and Library:MouseIsOverFrame(CurrentMenu.Menu, Mouse)) then
 			return
 		end
-		-- MouseEnter also fires when an element becomes visible under a stationary cursor (tab/section
-		-- switch), so confirm the cursor is genuinely over the element before showing anything.
 		if not (Library.Toggled and Library:MouseIsOverFrame(hoverInstance, Mouse)) then
 			return
 		end
@@ -793,7 +773,6 @@ function Library:AddTooltip(infoStr, hoverInstance)
 	return tip
 end
 
---// Notifications \\--
 local NotifyHolder
 function Library:Notify(info, time)
 	local text = typeof(info) == "table" and (info.Description or info.Title or "") or tostring(info)
@@ -805,7 +784,7 @@ function Library:Notify(info, time)
 		time = 3
 	end
 	if type(time) ~= "number" or time <= 0 then
-		persist = true -- 0/nil/persistent => no auto-dismiss, bar stays full
+		persist = true
 	end
 
 	if not NotifyHolder then
@@ -824,7 +803,6 @@ function Library:Notify(info, time)
 		})
 	end
 
-	-- layered toast (8,8,8 outer -> 38,38,38 inner w/ 1px border), auto-sized via a padding chain
 	local outer = New("Frame", {
 		Parent = NotifyHolder,
 		BackgroundColor3 = "Dark",
@@ -849,10 +827,6 @@ function Library:Notify(info, time)
 		Size = UDim2.fromOffset(0, 0),
 		ZIndex = 200,
 	})
-	-- theme accent countdown bar along the bottom edge (full width, 2px tall). BackgroundColor3 =
-	-- "Accent" auto-registers it (via the New factory) so SetAccent recolors it. Scale-X width and
-	-- scale-Y position keep it out of the AutomaticSize chain (the label drives the toast size).
-	-- Right-anchored so the fill gets eaten from the left and closes at the right edge.
 	local bar = New("Frame", {
 		Parent = inner,
 		BackgroundColor3 = "Accent",
@@ -885,9 +859,6 @@ function Library:Notify(info, time)
 	local handle = { Object = outer, AccentBar = bar }
 
 	if not persist then
-		-- single source of truth for the duration: the bar drains over `time` and the tween's Completed
-		-- drives the dismiss, so "empty" lands exactly on dismiss. Size.X.Scale 1 -> 0, eaten from the
-		-- left (right-anchored). Easing matches Obsidian's TimerFill (Linear, InOut).
 		local drain = TweenService:Create(
 			bar,
 			TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut),
@@ -914,9 +885,6 @@ function Library:Notify(info, time)
 	return handle
 end
 
---===================================================================--
---// Component constructors (Funcs)                                  --
---===================================================================--
 local Funcs = {}
 local BaseAddons = {}
 
@@ -926,9 +894,6 @@ local function applyTooltip(handle, info, instance)
 	end
 end
 
--- record a searchable element. `self` is the groupbox/subtab (carries Reveal/Tab/Record), `row` is
--- the element's dimmable Holder, `text` is its display label. Returns the entry so addons (KeyPicker)
--- can append their own text to it.
 local function indexElement(self, row, text)
 	if not (row and self and self.Record) then
 		return
@@ -952,8 +917,6 @@ function Funcs:AddLabel(info, doesWrap)
 	end
 	info = Library:Validate(info, { Text = "Label", DoesWrap = false, Visible = true })
 
-	-- full-width row so addons dock at the far right like a toggle; the text label sizes to its
-	-- glyphs so the tooltip hover region ends with the text (not the whole row)
 	local Holder = New("Frame", {
 		Parent = self.Container,
 		Name = "Label",
@@ -978,7 +941,6 @@ function Funcs:AddLabel(info, doesWrap)
 	local Label = { Text = info.Text, Type = "Label", TextLabel = TextLabel, Holder = Holder, AddonContainer = nil }
 	Label.SearchEntry = indexElement(self, Holder, info.Text)
 
-	-- fixed-height right strip (not fromScale, to avoid a circular size chain with the addon)
 	local Right = New("Frame", {
 		Parent = Holder,
 		Name = "RightContainer",
@@ -1031,7 +993,6 @@ function Funcs:AddButton(info, func)
 	end
 	info = Library:Validate(info, { Text = "Button", Func = function() end, DoubleClick = false, Disabled = false })
 
-	-- Button row is a horizontal flex container so AddButton can append a second button side-by-side.
 	local Holder = New("Frame", {
 		Parent = self.Container,
 		Name = "Button",
@@ -1049,7 +1010,6 @@ function Funcs:AddButton(info, func)
 	local Button = { Type = "Button", Holder = Holder }
 
 	local function makeSub(subInfo)
-		-- outer(0,0,0) wrapper + inner(38,38,38) button inset 2px with a 1px 56,56,56 border, per the dump
 		local Wrapper = New("Frame", {
 			Parent = Holder,
 			BackgroundColor3 = "Border",
@@ -1388,7 +1348,6 @@ function Funcs:AddSlider(idx, info)
 		Visible = info.Visible,
 	})
 
-	-- bar is inset 13px each side so the - / + steppers have room outside it (dump uses -26 width)
 	local Bar = New("TextButton", {
 		Parent = Holder,
 		Text = "",
@@ -1425,7 +1384,6 @@ function Funcs:AddSlider(idx, info)
 		TextSize = 12,
 	})
 
-	-- steppers live just outside the bar at -15 / +5 offsets, matching the dump
 	local Minus = New("TextButton", {
 		Parent = Bar,
 		Text = "-",
@@ -1531,9 +1489,6 @@ function Funcs:AddDropdown(idx, info)
 		Visible = true,
 	})
 
-	-- FontFace is ThemeManager's font picker; guarantee the pixel "Sentinel" option + Jura default here,
-	-- before ThemeManager wires FontFace:OnChanged, so the fresh-launch font is Jura regardless of any
-	-- caller-side injection ordering (ThemeManager's "Code" default would otherwise win the immediate fire)
 	if idx == "FontFace" and not info.Multi then
 		local function ensure(name, atFront)
 			for _, v in info.Values do
@@ -1611,15 +1566,12 @@ function Funcs:AddDropdown(idx, info)
 	Dropdown.Holder = Holder
 	indexElement(self, Holder, info.Text)
 
-	-- floating list (dump's Dropdown_1): outer(8,8,8) -> inner(38,38,38) -> items
 	local Menu = Library:AddContextMenu(DisplayOuter, function()
 		return UDim2.fromOffset(DisplayOuter.AbsoluteSize.X, 0)
 	end, function()
 		return { 0, DisplayOuter.AbsoluteSize.Y + 1 }
 	end, 1)
 
-	-- backing auto-sizes to the full item content (dump's Dropdown_1 is AutomaticSize.Y), so the dark
-	-- panel covers every option at any scroll position instead of only the first viewport
 	local ListOuter = New("Frame", {
 		Parent = Menu.Menu,
 		BackgroundColor3 = "Dark",
@@ -1757,9 +1709,9 @@ function Funcs:AddDropdown(idx, info)
 			if typeof(value) == "table" then
 				for k, v in value do
 					if type(k) == "number" then
-						Dropdown.Value[v] = true -- list form { "Item1", "Item3" }
+						Dropdown.Value[v] = true
 					elseif v then
-						Dropdown.Value[k] = true -- map form { Item1 = true } (SaveManager)
+						Dropdown.Value[k] = true
 					end
 				end
 			end
@@ -1785,7 +1737,6 @@ function Funcs:AddDropdown(idx, info)
 
 	Dropdown:BuildDropdownList()
 
-	-- apply Default
 	if info.Default ~= nil then
 		if Dropdown.Multi then
 			local def = typeof(info.Default) == "table" and info.Default or { info.Default }
@@ -1807,9 +1758,6 @@ function Funcs:AddDropdown(idx, info)
 	return Dropdown
 end
 
---===================================================================--
---// Addons (KeyPicker, ColorPicker)                                 --
---===================================================================--
 local SpecialInputs = {
 	[Enum.UserInputType.MouseButton1] = true,
 	[Enum.UserInputType.MouseButton2] = true,
@@ -1825,7 +1773,6 @@ local MouseInputToString = {
 	[Enum.UserInputType.MouseButton2] = "MB2",
 	[Enum.UserInputType.MouseButton3] = "MB3",
 }
--- Enum.KeyCode[<invalid>] throws in Roblox, so resolve through pcall.
 local function ResolveKey(key)
 	if typeof(key) == "EnumItem" then
 		return key
@@ -1846,8 +1793,6 @@ local function ResolveKey(key)
 	end
 	return nil
 end
--- canonical, round-trippable name for a resolved bind (KeyCode.Name or "MB2"), so SaveManager's
--- object.Value -> ResolveKey survives a save/load. The "[lc]" display is computed separately.
 local function CanonicalKeyName(bind)
 	if bind == nil then
 		return "None"
@@ -1879,7 +1824,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 	local KeyPicker = {
 		Value = info.Default,
 		Mode = info.Mode,
-		Modifiers = {}, -- not implemented; present so SaveManager's Save can read it
+		Modifiers = {},
 		Toggled = false,
 		Type = "KeyPicker",
 		Text = info.Text ~= "KeyPicker" and info.Text or (self.Text or "KeyPicker"),
@@ -1905,7 +1850,6 @@ function BaseAddons:AddKeyPicker(idx, info)
 		TextXAlignment = Enum.TextXAlignment.Right,
 	})
 
-	-- mode menu reusing the context-menu popup
 	local ModeMenu = Library:AddContextMenu(Picker, UDim2.fromOffset(62, 0), function()
 		return { Picker.AbsoluteSize.X + 2, 0 }
 	end, 1)
@@ -1974,7 +1918,6 @@ function BaseAddons:AddKeyPicker(idx, info)
 		table.insert(KeyPicker.OnChangedFns, func)
 	end
 	function KeyPicker:SetValue(data)
-		-- accept SaveManager's { key, mode, modifiers } table, or a single key (string/EnumItem)
 		local key = data
 		if type(data) == "table" then
 			key = data[1]
@@ -2010,7 +1953,6 @@ function BaseAddons:AddKeyPicker(idx, info)
 		picking = true
 		Picker.Text = "[...]"
 	end)
-	-- right-click the bind to open the mode menu
 	Picker.MouseButton2Click:Connect(function()
 		ModeMenu:Toggle()
 	end)
@@ -2060,7 +2002,6 @@ function BaseAddons:AddKeyPicker(idx, info)
 	KeyPicker:SetValue(info.Default)
 	Library.Options[idx] = KeyPicker
 	Library:AddKeybindRow(KeyPicker)
-	-- keypicker text is searchable via its parent element's entry (scope: main label + keypicker)
 	if self.SearchEntry and KeyPicker.Text then
 		self.SearchEntry.Text = self.SearchEntry.Text .. " " .. tostring(KeyPicker.Text):lower()
 	end
@@ -2113,14 +2054,12 @@ function BaseAddons:AddColorPicker(idx, info)
 		ZIndex = 4,
 	})
 
-	-- popup window matches the dump's standalone Colorpicker (SV box + hue bar + alpha bar + rgba box)
 	local Menu = Library:AddContextMenu(Display, UDim2.fromOffset(142, 146), function()
 		return { -126, 14 }
 	end, false)
 	local Shell = MakeWindowShell(Menu.Menu, UDim2.fromScale(1, 1), UDim2.fromOffset(0, 0), info.Title)
 	Shell.Outline.ZIndex = 50
 
-	-- outer(10,10,10) + inner(1px 56,56,56) layering, matching the tracks and the dump's colorpicker frames
 	local SatOuter = New("Frame", {
 		Parent = Shell.Body,
 		BackgroundColor3 = "Outline",
@@ -2129,8 +2068,6 @@ function BaseAddons:AddColorPicker(idx, info)
 		Size = UDim2.new(1, 0, 1, -50),
 		ZIndex = 51,
 	})
-	-- base hue layer: a Color3 literal (NOT a "White" scheme key) so UpdateColorsUsingRegistry can't
-	-- reset it to white; Display() keeps it at the current full-sat hue. White/black overlays sit on top.
 	local SatMap = New("TextButton", {
 		Parent = SatOuter,
 		Text = "",
@@ -2356,12 +2293,7 @@ function BaseAddons:AddColorPicker(idx, info)
 	return self
 end
 
---===================================================================--
---// Groupbox / Tabbox / Tab                                         --
---===================================================================--
 local function MakeGroupbox(side, name, tab)
-	-- full-height box: the panel fills the column; content is top-aligned and the empty space below
-	-- the last element sits inside the border (reverted from round 5's content-sizing)
 	local Outline, Inline, Body = MakePanel(side, UDim2.new(1, 0, 0, 0))
 	Outline.AutomaticSize = Enum.AutomaticSize.Y
 	Body.AutomaticSize = Enum.AutomaticSize.Y
@@ -2383,8 +2315,6 @@ local function MakeGroupbox(side, name, tab)
 
 	local titleLabel
 	if name then
-		-- header cue is full FontColor brightness (vs the dimmer label color); underline is reserved
-		-- for the active tabbox section, so titles are not underlined
 		titleLabel = New("TextLabel", {
 			Parent = Content,
 			Text = name,
@@ -2403,7 +2333,6 @@ local function MakeGroupbox(side, name, tab)
 			tab:Show()
 		end
 	end
-	-- search block record: chrome dimmed when the whole box has zero matches
 	Groupbox.Record = { Chrome = { Outline, Inline, Body, titleLabel }, Entries = {}, Tab = tab, Dimmed = false }
 	table.insert(Library.SearchBoxes, Groupbox.Record)
 	return setmetatable(Groupbox, { __index = Funcs })
@@ -2414,8 +2343,6 @@ local function MakeTabbox(side, tab)
 	Outline.AutomaticSize = Enum.AutomaticSize.Y
 	Body.AutomaticSize = Enum.AutomaticSize.Y
 
-	-- inset content 8px on all sides so the tabbox floats inside the tab with the same gap a
-	-- groupbox has (its Content frame uses UIPadding 8 all around); round 8 only did the top
 	New("UIPadding", {
 		Parent = Body,
 		PaddingTop = UDim.new(0, 8),
@@ -2424,7 +2351,6 @@ local function MakeTabbox(side, tab)
 		PaddingRight = UDim.new(0, 8),
 	})
 
-	-- header row of section selectors (dump's Section1 / Section2)
 	local Header = New("Frame", {
 		Parent = Body,
 		BackgroundTransparency = 1,
@@ -2445,12 +2371,10 @@ local function MakeTabbox(side, tab)
 	})
 
 	local Tabbox = { Tabs = {}, ActiveTab = nil, Holder = Outline, Body = Body }
-	-- one search record for the whole tabbox; its chrome dims only when every section has zero matches
 	Tabbox.Record = { Chrome = { Outline, Inline, Body }, Entries = {}, Tab = tab, Owner = Tabbox, Dimmed = false }
 	table.insert(Library.SearchBoxes, Tabbox.Record)
 
 	function Tabbox:AddTab(name)
-		-- underline is the active-section indicator only (the Underline frame below), so the text is plain
 		local SelectButton = New("TextButton", {
 			Parent = Header,
 			Text = name,
@@ -2486,7 +2410,6 @@ local function MakeTabbox(side, tab)
 		})
 
 		local SubTab = { Container = Content, Button = SelectButton, Tab = tab, Record = Tabbox.Record }
-		-- reveal = switch to this tab, then this section
 		SubTab.Reveal = function()
 			if tab then
 				tab:Show()
@@ -2522,14 +2445,9 @@ local function MakeTabbox(side, tab)
 	return Tabbox
 end
 
---===================================================================--
---// Search                                                          --
---===================================================================--
--- Manual transparency fade (chosen over CanvasGroup to avoid adding nodes to the AutomaticSize
--- chains). Each instance's original transparencies are snapshotted on first dim and restored exactly.
 local DIM_FACTOR = 0.62
 local DimProps = { "BackgroundTransparency", "TextTransparency", "TextStrokeTransparency", "ImageTransparency" }
-local DimState = {} -- instance -> { prop = originalValue } while dimmed
+local DimState = {}
 
 local function dimInstance(inst, on)
 	if on then
@@ -2588,7 +2506,6 @@ function Library:ResetSearch()
 	for _, record in Library.SearchBoxes do
 		dimChrome(record, false)
 	end
-	-- restore exact prior tab + sections
 	local snap = Library.SearchSnapshot
 	if snap then
 		for _, subtab in snap.Sections do
@@ -2611,7 +2528,6 @@ function Library:UpdateSearch(query, enterPressed)
 	end
 
 	if not Library.Searching then
-		-- snapshot the active tab + each tabbox's active section on the first non-empty keystroke
 		local sections = {}
 		for _, record in Library.SearchBoxes do
 			if record.Owner and record.Owner.ActiveTab then
@@ -2635,7 +2551,6 @@ function Library:UpdateSearch(query, enterPressed)
 		end
 	end
 
-	-- a box's chrome dims only when none of its own entries matched
 	for _, record in Library.SearchBoxes do
 		local anyMatch = false
 		for _, entry in record.Entries do
@@ -2647,15 +2562,11 @@ function Library:UpdateSearch(query, enterPressed)
 		dimChrome(record, not anyMatch)
 	end
 
-	-- jump: only when the active tab has no match (so you stay put if your target is here), or on Enter
 	if firstMatch and ((not activeHasMatch) or enterPressed) and firstMatch.Reveal then
 		firstMatch.Reveal()
 	end
 end
 
---===================================================================--
---// Window                                                          --
---===================================================================--
 function Library:CreateWindow(windowInfo)
 	windowInfo = Library:Validate(windowInfo, {
 		Title = "Sentinel",
@@ -2683,7 +2594,6 @@ function Library:CreateWindow(windowInfo)
 		)
 	end
 
-	-- title bar drag handle; right ~165px excluded so it never overlaps the search box / footer
 	local DragHandle = New("TextButton", {
 		Parent = Shell.Body,
 		Text = "",
@@ -2709,8 +2619,6 @@ function Library:CreateWindow(windowInfo)
 		})
 	end
 
-	-- compact search box in the title bar, left of the footer. The TextBox sinks input (so a click
-	-- focuses it without reaching the DragHandle), and the DragHandle rect already excludes this area.
 	local SearchOuter = New("Frame", {
 		Parent = Shell.Body,
 		BackgroundColor3 = "Dark",
@@ -2749,7 +2657,6 @@ function Library:CreateWindow(windowInfo)
 		end
 	end))
 
-	-- accent strip + tab/content region (dump's Accent at y=18)
 	local AccentRegion = New("Frame", {
 		Parent = Shell.Body,
 		BackgroundColor3 = "Accent",
@@ -2836,7 +2743,7 @@ function Library:CreateWindow(windowInfo)
 			BackgroundColor3 = "Inline",
 			BorderColor3 = "Border",
 			Size = UDim2.new(0, 100, 1, 0),
-			ZIndex = -1, -- border frame sits behind so the button's translucency reveals the accent ring
+			ZIndex = -1,
 		})
 		New("UIFlexItem", { Parent = TabButtonHolder, FlexMode = Enum.UIFlexMode.Fill })
 		local TabButton = New("TextButton", {
@@ -2871,7 +2778,6 @@ function Library:CreateWindow(windowInfo)
 			Padding = UDim.new(0, 6),
 		})
 
-		-- full-height bordered column; groupboxes stack inside its scroll, which scrolls on overflow
 		local function makeSide()
 			local _, _, body = MakePanel(Container, UDim2.new(0.5, 0, 1, 0))
 			New("UIFlexItem", { Parent = body.Parent.Parent, FlexMode = Enum.UIFlexMode.Fill })
@@ -2918,7 +2824,6 @@ function Library:CreateWindow(windowInfo)
 				other.Button.BackgroundTransparency = 0
 			end
 			Container.Visible = true
-			-- active tab: inline turns crimson + button goes translucent so the accent ring shows
 			TabButtonHolder.BackgroundColor3 = Library.Scheme.Accent
 			TabButton.BackgroundTransparency = 0.76
 			Library.ActiveTab = Tab
@@ -2953,9 +2858,6 @@ function Library:CreateWindow(windowInfo)
 	return Window
 end
 
---===================================================================--
---// Satellite windows (data-driven)                                 --
---===================================================================--
 function Library:SetWatermarkVisibility(visible)
 	if not Library.Watermark then
 		local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(100, 24), UDim2.fromOffset(16, 16))
@@ -3037,7 +2939,6 @@ function Library:CreatePlayerList()
 				})
 				New("UIStroke", { Parent = lbl })
 				if withDivider then
-					-- 1px vertical separator sitting in the gap before this column (dump's -10 offset)
 					New("Frame", {
 						Parent = lbl,
 						BackgroundColor3 = "Divider",
@@ -3059,7 +2960,6 @@ function Library:CreatePlayerList()
 		shell.Outline.Visible = v
 	end
 
-	-- populate from the real player list (sorted), refreshed on join/leave
 	function PlayerList:Refresh()
 		local players = Players:GetPlayers()
 		table.sort(players, function(a, b)
@@ -3076,7 +2976,6 @@ function Library:CreatePlayerList()
 		PlayerList:SetPlayers(entries)
 	end
 
-	-- PlayerRemoving fires before the player leaves GetPlayers, so defer the refresh a frame
 	Library:GiveSignal(Players.PlayerAdded:Connect(function()
 		PlayerList:Refresh()
 	end))
@@ -3091,13 +2990,11 @@ function Library:CreatePlayerList()
 	return PlayerList
 end
 
---// Keybind list (auto-populated by keypickers) \\--
 local KeybindShell, KeybindScroll
 local function ensureKeybindList()
 	if KeybindShell then
 		return
 	end
-	-- fixed-size contained shell (same layering as PlayerList) so the black body stays inside the accent ring
 	KeybindShell = MakeWindowShell(ScreenGui, UDim2.fromOffset(240, 200), UDim2.fromOffset(16, 200), "binds")
 	Library:MakeDraggable(KeybindShell.Outline, KeybindShell.Body)
 	local _, _, body = MakePanel(KeybindShell.Body, UDim2.new(1, 0, 1, -18), UDim2.fromOffset(0, 18))
@@ -3130,7 +3027,6 @@ function Library:AddKeybindRow(keyPicker)
 	New("UIListLayout", { Parent = Row, FillDirection = Enum.FillDirection.Horizontal })
 	New("UIPadding", { Parent = Row, PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
 	local function col(text, divider)
-		-- AutomaticSize.X keeps each column at least its text width so flex can't squeeze them into overlap
 		local lbl = New("TextLabel", {
 			Parent = Row,
 			Text = text,
@@ -3142,7 +3038,6 @@ function Library:AddKeybindRow(keyPicker)
 		})
 		New("UIStroke", { Parent = lbl })
 		if divider then
-			-- 1px column separator in the gap before this column (matches PlayerList / dump)
 			New("Frame", {
 				Parent = lbl,
 				BackgroundColor3 = "Divider",
@@ -3173,9 +3068,6 @@ function Library:UpdateKeybindRow(keyPicker)
 	row.State.Text = tostring(keyPicker:GetState())
 end
 
---===================================================================--
---// Cleanup                                                         --
---===================================================================--
 function Library:OnUnload(callback)
 	table.insert(Library.UnloadSignals, callback)
 end
@@ -3220,7 +3112,6 @@ function Library:Unload()
 	getgenv().Library = nil
 end
 
---// Focus tracking + toggle keybind \\--
 Library:GiveSignal(UserInputService.WindowFocused:Connect(function()
 	Library.IsRobloxFocused = true
 end))
