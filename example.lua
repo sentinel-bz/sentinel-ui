@@ -124,7 +124,6 @@ ThemeManager.BuiltInThemes["Sentinel"] =
 ThemeManager.DefaultTheme = "Sentinel"
 local ThemesTab = Window:AddTab("Themes")
 ThemeManager:ApplyToTab(ThemesTab)
--- the FontFace dropdown auto-includes the pixel "Sentinel" option and defaults to Jura (handled in the library)
 
 local InterfaceBox = ThemesTab:AddRightGroupbox("Interface")
 InterfaceBox:AddSlider("FontSize", {
@@ -157,7 +156,7 @@ end)
 -- Unload on End
 local UserInputService = game:GetService("UserInputService")
 Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not gameProcessed and input.KeyCode == Enum.KeyCode.Delete then
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.End then
 		Library:Unload()
 	end
 end))
@@ -166,4 +165,4 @@ Library:Notify("Sentinel UI loaded")
 Library:Notify("RightControl toggles · End unloads")
 Library:Notify("Watch this accent bar drain over 6s", 6)
 
-print("Sentinel example loaded. RightControl toggles the menu, End unloads it.")
+print("rightctrl = toggle, end unload")
