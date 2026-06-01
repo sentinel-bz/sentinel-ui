@@ -118,7 +118,7 @@ local PlayerList = Library:CreatePlayerList()
 --// theming (ThemeManager drives 5 masters; the library derives its 15 shades from them)
 local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/ThemeManager.lua"))()
 ThemeManager:SetLibrary(Library)
-ThemeManager:SetFolder("sentinel/configs")
+ThemeManager:SetFolder("sentinel")
 ThemeManager.BuiltInThemes["Sentinel"] =
 	{ 0, { FontColor = "c8c8c8", MainColor = "262626", AccentColor = "c32148", BackgroundColor = "141414", OutlineColor = "383838" } }
 ThemeManager.DefaultTheme = "Sentinel"
@@ -128,7 +128,7 @@ ThemeManager:ApplyToTab(Window:AddTab("Themes"))
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/main/dependencies/SaveManager.lua"))()
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetFolder("sentinel/configs")
+SaveManager:SetFolder("sentinel")
 
 local ConfigTab = Window:AddTab("Config")
 SaveManager:BuildConfigSection(ConfigTab)
