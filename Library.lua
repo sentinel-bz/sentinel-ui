@@ -140,7 +140,6 @@ local Library = {
 	SearchIndex = {},
 	SearchBoxes = {},
 	Searching = false,
-	SearchSnapshot = nil,
 
 	ScreenGui = nil,
 	ShowCursorBinding = string.sub(tostring({}), 8),
@@ -2697,17 +2696,8 @@ function Library:ResetSearch()
 	for _, record in Library.SearchBoxes do
 		dimChrome(record, false)
 	end
-	local snap = Library.SearchSnapshot
-	if snap then
-		for _, subtab in snap.Sections do
-			subtab:Show()
-		end
-		if snap.Tab then
-			snap.Tab:Show()
-		end
-	end
+	-- intentionally do NOT restore the pre-search tab/sections; leave the user where they are
 	Library.Searching = false
-	Library.SearchSnapshot = nil
 end
 
 function Library:UpdateSearch(query, enterPressed)
@@ -2718,16 +2708,7 @@ function Library:UpdateSearch(query, enterPressed)
 		return
 	end
 
-	if not Library.Searching then
-		local sections = {}
-		for _, record in Library.SearchBoxes do
-			if record.Owner and record.Owner.ActiveTab then
-				table.insert(sections, record.Owner.ActiveTab)
-			end
-		end
-		Library.SearchSnapshot = { Tab = Library.ActiveTab, Sections = sections }
-		Library.Searching = true
-	end
+	Library.Searching = true
 
 	local firstMatch, activeHasMatch = nil, false
 	for _, entry in Library.SearchIndex do
@@ -3317,7 +3298,6 @@ function Library:Unload()
 	table.clear(Library.SearchBoxes)
 	table.clear(DimState)
 	Library.Searching = false
-	Library.SearchSnapshot = nil
 	getgenv().Library = nil
 end
 
