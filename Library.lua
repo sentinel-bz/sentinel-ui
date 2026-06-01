@@ -463,42 +463,22 @@ Library:GiveSignal(ScreenGui.DescendantRemoving:Connect(function(instance)
 	end
 end))
 
+-- Obsidian-style arrow; tip at the top-left so AnchorPoint(0,0) + Position=mouse lands the tip on the cursor.
+-- ImageColor3 is a registry key so SetAccent recolors it.
 local Cursor
 do
-	Cursor = New("Frame", {
+	Cursor = New("ImageLabel", {
 		Parent = ScreenGui,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = "White",
-		BorderColor3 = "Border",
-		Size = UDim2.fromOffset(9, 1),
+		AnchorPoint = Vector2.new(0, 0),
+		BackgroundTransparency = 1,
+		Image = "rbxasset://textures/Cursors/KeyboardMouse/ArrowCursor.png",
+		ImageColor3 = "Accent",
+		Size = UDim2.fromOffset(18, 18),
 		Visible = false,
 		ZIndex = 11000,
 	})
-	New("Frame", {
-		Parent = Cursor,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = "Border",
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 2, 1, 2),
-		ZIndex = 10999,
-	})
-	local Vert = New("Frame", {
-		Parent = Cursor,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = "White",
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(1, 9),
-		ZIndex = 11000,
-	})
-	New("Frame", {
-		Parent = Vert,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = "Border",
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 2, 1, 2),
-		ZIndex = 10999,
-	})
 end
+Library.Cursor = Cursor
 
 function Library:MakeDraggable(ui, dragFrame, isMainWindow)
 	local startPos, framePos
@@ -774,11 +754,23 @@ end
 
 local NotifyHolder
 function Library:Notify(info, time)
-	local text = typeof(info) == "table" and (info.Description or info.Title or "") or tostring(info)
-	local persist = typeof(info) == "table" and info.Persist == true
-	if typeof(info) == "table" and info.Time ~= nil then
-		time = info.Time
+	local title, body, persist
+	if typeof(info) == "table" then
+		title = info.Title
+		body = info.Description
+		persist = info.Persist == true
+		if info.Time ~= nil then
+			time = info.Time
+		end
+	else
+		title = tostring(info)
 	end
+	-- a lone Description (no Title) renders as the single line
+	if title == nil and body ~= nil then
+		title, body = body, nil
+	end
+	title = title or ""
+
 	if time == nil then
 		time = 3
 	end
@@ -789,16 +781,16 @@ function Library:Notify(info, time)
 	if not NotifyHolder then
 		NotifyHolder = New("Frame", {
 			Parent = ScreenGui,
-			AnchorPoint = Vector2.new(1, 0),
+			AnchorPoint = Vector2.new(0, 0),
 			BackgroundTransparency = 1,
-			Position = UDim2.new(1, -16, 0, 16),
-			Size = UDim2.new(0, 240, 1, -32),
+			Position = UDim2.fromOffset(16, 16),
+			Size = UDim2.new(0, 260, 1, -32),
 			ZIndex = 200,
 		})
 		New("UIListLayout", {
 			Parent = NotifyHolder,
-			HorizontalAlignment = Enum.HorizontalAlignment.Right,
-			Padding = UDim.new(0, 6),
+			HorizontalAlignment = Enum.HorizontalAlignment.Left,
+			Padding = UDim.new(0, 8),
 		})
 	end
 
@@ -806,8 +798,8 @@ function Library:Notify(info, time)
 		Parent = NotifyHolder,
 		BackgroundColor3 = "Dark",
 		BorderColor3 = "DarkBorder",
-		AutomaticSize = Enum.AutomaticSize.XY,
-		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(0, 248, 0, 0),
 		ZIndex = 200,
 	})
 	New("UIPadding", {
@@ -822,40 +814,73 @@ function Library:Notify(info, time)
 		BackgroundColor3 = "Element",
 		BorderColor3 = "ElementBorder",
 		BorderSizePixel = 1,
-		AutomaticSize = Enum.AutomaticSize.XY,
-		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, -2, 0, 0),
 		ZIndex = 200,
 	})
+	local content = New("Frame", {
+		Parent = inner,
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 0),
+		ZIndex = 201,
+	})
+	New("UIListLayout", { Parent = content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) })
+	New("UIPadding", {
+		Parent = content,
+		PaddingTop = UDim.new(0, 7),
+		PaddingBottom = UDim.new(0, 9),
+		PaddingLeft = UDim.new(0, 10),
+		PaddingRight = UDim.new(0, 10),
+	})
+
+	local titleLabel = New("TextLabel", {
+		Parent = content,
+		Text = title,
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0,
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 14),
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		LayoutOrder = 1,
+		ZIndex = 201,
+	})
+
+	local bodyLabel
+	if body and body ~= "" then
+		bodyLabel = New("TextLabel", {
+			Parent = content,
+			Text = body,
+			TextColor3 = "DimColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 12),
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			LayoutOrder = 2,
+			ZIndex = 201,
+		})
+	end
+
+	-- left edge fixed, width shrinks so the bar empties toward the LEFT screen edge
 	local bar = New("Frame", {
 		Parent = inner,
 		BackgroundColor3 = "Accent",
 		BorderColor3 = "Border",
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, 0, 1, 0),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 1, 0),
 		Size = UDim2.new(1, 0, 0, 2),
 		ZIndex = 202,
 	})
-	local label = New("TextLabel", {
-		Parent = inner,
-		Text = text,
-		TextColor3 = "FontColor",
-		TextStrokeTransparency = 0,
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.XY,
-		Size = UDim2.fromOffset(0, 14),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextWrapped = true,
-		ZIndex = 201,
-	})
-	New("UIPadding", {
-		Parent = label,
-		PaddingTop = UDim.new(0, 3),
-		PaddingBottom = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 6),
-		PaddingRight = UDim.new(0, 6),
-	})
 
-	local handle = { Object = outer, AccentBar = bar }
+	local handle = { Object = outer, AccentBar = bar, TitleLabel = titleLabel, BodyLabel = bodyLabel }
 
 	if not persist then
 		local drain = TweenService:Create(

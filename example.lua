@@ -13,7 +13,7 @@ local Window = Library:CreateWindow({
 	Title = "sentinel.bz",
 	Footer = "DEV",
 	Center = true,
-	ShowCustomCursor = false,
+	ShowCustomCursor = true,
 	ToggleKeybind = Enum.KeyCode.RightControl,
 })
 
@@ -161,8 +161,9 @@ Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProce
 	end
 end))
 
-Library:Notify("Sentinel UI loaded")
-Library:Notify("RightControl toggles · End unloads")
-Library:Notify("Watch this accent bar drain over 6s", 6)
+Library:Notify({ Title = "Sentinel UI", Description = "loaded on the left side now" })
+Library:Notify({ Title = "Keybinds", Description = "RightControl toggles · End unloads" })
+Library:Notify("plain one-liner still works")
+Library:Notify({ Title = "Watch the drain", Description = "empties toward the left edge", Time = 6 })
 
 print("rightctrl = toggle, end unload")
