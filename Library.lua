@@ -61,6 +61,8 @@ local Scheme = {
 	Pop = Color3.fromRGB(50, 50, 50),
 	White = Color3.fromRGB(255, 255, 255),
 	Divider = Color3.fromRGB(32, 32, 38),
+	-- semantic warning color; deliberately not in MasterShades so it stays red across theme swaps
+	Red = Color3.fromRGB(225, 65, 65),
 
 	MainColor = Color3.fromRGB(38, 38, 38),
 	AccentColor = Color3.fromRGB(195, 33, 72),
@@ -294,6 +296,51 @@ end
 
 local function Trim(text)
 	return text:match("^%s*(.-)%s*$")
+end
+
+local DISABLED_TEXT_FADE = 0.6
+local DISABLED_FILL_FADE = 0.65
+
+-- recolor by scheme key and repoint the registry so the color survives theme swaps
+local function SetSchemeText(label, key, fallbackKey)
+	key = key or fallbackKey
+	local color = Scheme[key]
+	if color == nil then
+		return
+	end
+	label.TextColor3 = color
+	local reg = Library.Registry[label]
+	if not reg then
+		reg = {}
+		Library.Registry[label] = reg
+	end
+	reg.TextColor3 = key
+end
+
+-- greys via transparency only (never color props) so it can't fight UpdateColorsUsingRegistry
+-- or SetTextColorKey; fully reversible. fades = { {inst, prop, onValue, offValue}, ... }
+local function MakeDisableable(handle, fades, setInteractive)
+	handle.Disabled = handle.Disabled == true
+	function handle:SetDisabled(state)
+		state = state and true or false
+		self.Disabled = state
+		for _, f in fades do
+			pcall(function()
+				f[1][f[2]] = state and f[3] or f[4]
+			end)
+		end
+		if setInteractive then
+			setInteractive(not state)
+		end
+	end
+end
+
+local function MakeRecolorable(handle, label, defaultKey)
+	handle.TextLabel = label
+	handle.DefaultTextKey = defaultKey or "FontColor"
+	function handle:SetTextColorKey(key)
+		SetSchemeText(label, key, self.DefaultTextKey)
+	end
 end
 
 function Library:GiveSignal(connection)
@@ -1034,6 +1081,11 @@ function Funcs:AddLabel(info, doesWrap)
 		Holder.Visible = v
 	end
 
+	MakeRecolorable(Label, TextLabel, "DimColor")
+	MakeDisableable(Label, {
+		{ TextLabel, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+	})
+
 	applyTooltip(Label, info, TextLabel)
 	setmetatable(Label, { __index = BaseAddons })
 	return Label
@@ -1077,6 +1129,7 @@ function Funcs:AddButton(info, func)
 	})
 
 	local Button = { Type = "Button", Holder = Holder }
+	local bases = {}
 
 	local function makeSub(subInfo)
 		local Wrapper = New("Frame", {
@@ -1099,6 +1152,7 @@ function Funcs:AddButton(info, func)
 		})
 
 		local Sub = { Text = subInfo.Text, Func = subInfo.Func, Base = Base }
+		table.insert(bases, Base)
 		local lastClick = 0
 		Base.MouseButton1Click:Connect(function()
 			if subInfo.Disabled then
@@ -1136,6 +1190,21 @@ function Funcs:AddButton(info, func)
 	indexElement(self, Holder, info.Text)
 	Button.SetText = function(_, text)
 		main:SetText(text)
+	end
+
+	MakeRecolorable(Button, main.Base, "DimColor")
+	local buttonFades = {}
+	for _, b in bases do
+		table.insert(buttonFades, { b, "TextTransparency", DISABLED_TEXT_FADE, 0 })
+		table.insert(buttonFades, { b, "BackgroundTransparency", DISABLED_FILL_FADE, 0 })
+	end
+	MakeDisableable(Button, buttonFades, function(on)
+		for _, b in bases do
+			b.Interactable = on
+		end
+	end)
+	if info.Disabled then
+		Button:SetDisabled(true)
 	end
 
 	function Button:AddButton(subInfo, subFunc)
@@ -1263,10 +1332,25 @@ function Funcs:AddToggle(idx, info)
 	end
 
 	local function flip()
+		if Toggle.Disabled then
+			return
+		end
 		Toggle:SetValue(not Toggle.Value)
 	end
 	Holder.MouseButton1Click:Connect(flip)
 	Box.MouseButton1Click:Connect(flip)
+
+	MakeRecolorable(Toggle, Label, "DimColor")
+	MakeDisableable(Toggle, {
+		{ Label, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Fill, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
+	}, function(on)
+		Holder.Interactable = on
+		Box.Interactable = on
+	end)
+	if info.Disabled then
+		Toggle:SetDisabled(true)
+	end
 
 	Toggle:Display()
 	applyTooltip(Toggle, info, Holder)
@@ -1369,6 +1453,14 @@ function Funcs:AddInput(idx, info)
 	Box.FocusLost:Connect(function()
 		Input.Value = Box.Text
 		fire()
+	end)
+
+	MakeRecolorable(Input, Box, "FontColor")
+	MakeDisableable(Input, {
+		{ Box, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Box, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
+	}, function(on)
+		Box.TextEditable = on
 	end)
 
 	applyTooltip(Input, info, Holder)
@@ -1540,6 +1632,19 @@ function Funcs:AddSlider(idx, info)
 		end
 	end))
 
+	MakeRecolorable(Slider, Holder, "DimColor")
+	MakeDisableable(Slider, {
+		{ Holder, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ ValueLabel, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Minus, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Plus, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Fill, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
+	}, function(on)
+		Bar.Interactable = on
+		Minus.Interactable = on
+		Plus.Interactable = on
+	end)
+
 	Slider:Display()
 	applyTooltip(Slider, info, Holder)
 	Library.Options[idx] = Slider
@@ -1591,7 +1696,7 @@ function Funcs:AddDropdown(idx, info)
 		Size = UDim2.new(1, 0, 0, 30),
 		Visible = info.Visible,
 	})
-	New("TextLabel", {
+	local TitleLabel = New("TextLabel", {
 		Parent = Holder,
 		Text = info.Text,
 		TextColor3 = "DimColor",
@@ -1821,6 +1926,15 @@ function Funcs:AddDropdown(idx, info)
 		end
 	end
 
+	MakeRecolorable(Dropdown, TitleLabel, "DimColor")
+	MakeDisableable(Dropdown, {
+		{ TitleLabel, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Button, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+		{ Button, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
+	}, function(on)
+		Button.Interactable = on
+	end)
+
 	Dropdown:Display()
 	applyTooltip(Dropdown, info, Holder)
 	Library.Options[idx] = Dropdown
@@ -2027,7 +2141,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 	end)
 
 	Library:GiveSignal(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if Library.Unloaded then
+		if Library.Unloaded or KeyPicker.Disabled then
 			return
 		end
 		if picking then
@@ -2060,13 +2174,20 @@ function BaseAddons:AddKeyPicker(idx, info)
 		end
 	end))
 	Library:GiveSignal(UserInputService.InputEnded:Connect(function(input)
-		if Library.Unloaded or KeyPicker.Mode ~= "Hold" or not KeyPicker.Bind then
+		if Library.Unloaded or KeyPicker.Disabled or KeyPicker.Mode ~= "Hold" or not KeyPicker.Bind then
 			return
 		end
 		if (input.KeyCode == KeyPicker.Bind) or (input.UserInputType == KeyPicker.Bind) then
 			fireState()
 		end
 	end))
+
+	MakeRecolorable(KeyPicker, Picker, "DimColor")
+	MakeDisableable(KeyPicker, {
+		{ Picker, "TextTransparency", DISABLED_TEXT_FADE, 0 },
+	}, function(on)
+		Picker.Interactable = on
+	end)
 
 	KeyPicker:SetValue(info.Default)
 	Library.Options[idx] = KeyPicker
