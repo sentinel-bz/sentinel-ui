@@ -122,7 +122,9 @@ ThemeManager:SetLibrary(Library)
 ThemeManager:SetFolder("sentinel")
 ThemeManager.BuiltInThemes["Sentinel"] =
 	{ 0, { FontColor = "c8c8c8", MainColor = "262626", AccentColor = "c32148", BackgroundColor = "141414", OutlineColor = "383838" } }
-ThemeManager.DefaultTheme = "Sentinel"
+ThemeManager.BuiltInThemes["Grey"] =
+	{ 0, { FontColor = "ffffff", MainColor = "2b2b2b", AccentColor = "8a8a8a", BackgroundColor = "1c1c1c", OutlineColor = "3c3c3c" } }
+ThemeManager.DefaultTheme = "Jester"
 local ThemesTab = Window:AddTab("Themes")
 ThemeManager:ApplyToTab(ThemesTab)
 
