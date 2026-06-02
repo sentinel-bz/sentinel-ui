@@ -105,6 +105,12 @@ Info:AddKeyPicker("AimKey", { Default = "MB2", Mode = "Hold" })
 Right:AddDivider()
 Right:AddToggle("AnotherToggle", { Text = "another toggle", Default = true })
 
+Right:AddDivider()
+local ChatLog = Right:AddLogView("ChatLog", { Title = "Chat Log", MaxLines = 12, Height = 70 })
+for i = 1, 20 do
+	ChatLog:Add(("[%02d] player%d: sample chat message %d"):format(i, i % 5, i))
+end
+
 local Tabbox = Visuals:AddLeftTabbox()
 local SecA = Tabbox:AddTab("Section1")
 SecA:AddToggle("SecAToggle", { Text = "esp" })

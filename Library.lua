@@ -1650,6 +1650,166 @@ function Funcs:AddSlider(idx, info)
 	return Slider
 end
 
+-- generic scrollable log view: the library owns the surface, the consumer feeds it lines.
+-- lines are plain New() TextLabels (no hardcoded FontFace/TextSize) so SetFont/SetFontSize reach them.
+function Funcs:AddLogView(idx, info)
+	info = Library:Validate(info, {
+		MaxLines = 100,
+		Height = 80,
+		Visible = true,
+	})
+	local hasTitle = typeof(info.Title) == "string" and info.Title ~= ""
+	local titleSpace = hasTitle and 14 or 0
+
+	local Holder = New("Frame", {
+		Parent = self.Container,
+		Name = "LogView",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, titleSpace + info.Height),
+		Visible = info.Visible,
+	})
+	if hasTitle then
+		New("TextLabel", {
+			Parent = Holder,
+			Text = info.Title,
+			TextColor3 = "DimColor",
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 12),
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+	end
+
+	local _, _, Body = MakePanel(Holder, UDim2.new(1, 0, 0, info.Height), UDim2.fromOffset(0, titleSpace))
+	local Scroll = New("ScrollingFrame", {
+		Parent = Body,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 1, 0),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+		TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+		BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+		ZIndex = 2,
+	})
+	New("UIListLayout", {
+		Parent = Scroll,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 1),
+	})
+	New("UIPadding", {
+		Parent = Scroll,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 3),
+		PaddingRight = UDim.new(0, 3),
+	})
+
+	local LogView = {
+		Type = "LogView",
+		Holder = Holder,
+		Scroll = Scroll,
+		Lines = {},
+		MaxLines = math.max(1, math.floor(info.MaxLines)),
+		_counter = 0,
+	}
+
+	-- pinned only when the user is already at/near the bottom; if they scrolled up to read, leave them
+	local function isAtBottom()
+		local ok, atBottom = pcall(function()
+			local canvas = Scroll.AbsoluteCanvasSize
+			local window = Scroll.AbsoluteWindowSize or Scroll.AbsoluteSize
+			local maxScroll = math.max(0, canvas.Y - window.Y)
+			return Scroll.CanvasPosition.Y >= maxScroll - 4
+		end)
+		return (not ok) or atBottom
+	end
+	local function pinBottom()
+		local function apply()
+			pcall(function()
+				Scroll.CanvasPosition = Vector2.new(0, 1e7)
+			end)
+		end
+		-- defer one step so the just-added line is laid out before we read/clamp the canvas
+		if task and task.defer then
+			task.defer(apply)
+		else
+			apply()
+		end
+	end
+
+	function LogView:Add(text)
+		text = tostring(text)
+		local pinned = isAtBottom()
+		local order = self._counter
+		self._counter = order + 1
+		local label = New("TextLabel", {
+			Parent = Scroll,
+			Name = "Line",
+			Text = text,
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			LayoutOrder = order,
+		})
+		table.insert(self.Lines, { Text = text, Label = label })
+		while #self.Lines > self.MaxLines do
+			local oldest = table.remove(self.Lines, 1)
+			if oldest and oldest.Label then
+				pcall(function()
+					oldest.Label:Destroy()
+				end)
+			end
+		end
+		if pinned then
+			pinBottom()
+		end
+		return label
+	end
+
+	function LogView:Clear()
+		for _, line in self.Lines do
+			if line.Label then
+				pcall(function()
+					line.Label:Destroy()
+				end)
+			end
+		end
+		table.clear(self.Lines)
+		self._counter = 0
+	end
+
+	function LogView:SetLines(lines)
+		self:Clear()
+		if type(lines) == "table" then
+			for _, text in lines do
+				self:Add(text)
+			end
+		end
+	end
+
+	function LogView:GetLines()
+		local out = {}
+		for i, line in self.Lines do
+			out[i] = line.Text
+		end
+		return out
+	end
+
+	if idx ~= nil then
+		Library.Options[idx] = LogView
+	end
+	return LogView
+end
+
 function Funcs:AddDropdown(idx, info)
 	info = Library:Validate(info, {
 		Text = "Dropdown",
