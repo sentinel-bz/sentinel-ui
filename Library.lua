@@ -3409,19 +3409,44 @@ function Library:CreateStatusList(info)
 		HideInactive = false,
 	})
 
-	-- a single dark frame with a thin accent UIStroke border (StatusList-only) instead of the thick
-	-- layered accent frame, which bled the accent across the whole panel through the transparent body
+	-- layered border chrome, all AutomaticSize so the box grows to fit its content
 	local Outline = New("Frame", {
 		Parent = ScreenGui,
-		BackgroundColor3 = "Body",
+		BackgroundColor3 = "Outline",
 		BorderColor3 = "Border",
-		BackgroundTransparency = 0.76,
 		Position = UDim2.fromOffset(16, 440),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 	})
-	New("UIStroke", { Parent = Outline, Color = "Accent", Thickness = 1 })
-	local Body = Outline
+	New("UIPadding", {
+		Parent = Outline,
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		PaddingLeft = UDim.new(0, 1),
+		PaddingRight = UDim.new(0, 1),
+	})
+	local Accent = New("Frame", {
+		Parent = Outline,
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	})
+	New("UIPadding", {
+		Parent = Accent,
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		PaddingLeft = UDim.new(0, 1),
+		PaddingRight = UDim.new(0, 1),
+	})
+	local Body = New("Frame", {
+		Parent = Accent,
+		BackgroundColor3 = "Body",
+		BorderColor3 = "Border",
+		BackgroundTransparency = 0.76,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	})
 	New("UIPadding", {
 		Parent = Body,
 		PaddingTop = UDim.new(0, 2),
