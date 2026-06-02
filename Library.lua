@@ -2168,7 +2168,8 @@ function BaseAddons:AddKeyPicker(idx, info)
 		if KeyPicker.Mode == "Toggle" then
 			KeyPicker.Toggled = not KeyPicker.Toggled
 			fireState()
-		elseif KeyPicker.Mode == "Hold" then
+		elseif KeyPicker.Mode == "Hold" or KeyPicker.Mode == "Press" then
+			-- Press: one-shot action fired on key-down (GetState stays false, no toggle state)
 			fireState()
 		end
 	end))
