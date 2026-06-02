@@ -24,6 +24,12 @@ for i = 1, 20 do
 	ChatLog:Add(("[%02d] player%d: sample chat message %d"):format(i, i % 5, i))
 end
 
+-- standalone auto-sizing status panel (draggable, like the keybind list)
+local Status = Library:CreateStatusList({ Title = "status" })
+Status:AddItem("farming: active")
+Status:AddItem("alert: enemy nearby", Color3.fromRGB(255, 80, 80))
+Status:AddItem("ping: 42ms")
+
 local Aimbot = Window:AddTab("Aimbot")
 local Visuals = Window:AddTab("Visuals")
 Window:AddTab("Settings")
@@ -117,6 +123,20 @@ Right:AddToggle("ShowChatLog", {
 	Default = true,
 	Callback = function(on)
 		ChatLog:SetVisible(on)
+	end,
+})
+Right:AddToggle("ShowStatus", {
+	Text = "show status list",
+	Default = true,
+	Callback = function(on)
+		Status:SetVisible(on)
+	end,
+})
+Right:AddToggle("StatusHideInactive", {
+	Text = "status: hide when empty",
+	Default = false,
+	Callback = function(on)
+		Status:SetHideInactive(on)
 	end,
 })
 

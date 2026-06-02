@@ -3399,6 +3399,161 @@ function Library:CreateChatLog(info)
 	return ChatLog
 end
 
+-- standalone auto-sizing draggable status panel (like the KeybindList box). domain-neutral:
+-- the consumer feeds it text rows. rows are plain New() TextLabels (no hardcoded font) so
+-- SetFont/SetFontSize reach them; the box auto-sizes to its widest row + row count via AutomaticSize.
+function Library:CreateStatusList(info)
+	info = Library:Validate(info or {}, {
+		Title = "status",
+		Visible = true,
+		HideInactive = false,
+	})
+
+	-- layered border chrome, all AutomaticSize so the box grows to fit its content
+	local Outline = New("Frame", {
+		Parent = ScreenGui,
+		BackgroundColor3 = "Outline",
+		BorderColor3 = "Border",
+		Position = UDim2.fromOffset(16, 440),
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	})
+	New("UIPadding", {
+		Parent = Outline,
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		PaddingLeft = UDim.new(0, 1),
+		PaddingRight = UDim.new(0, 1),
+	})
+	local Accent = New("Frame", {
+		Parent = Outline,
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	})
+	New("UIPadding", {
+		Parent = Accent,
+		PaddingTop = UDim.new(0, 1),
+		PaddingBottom = UDim.new(0, 1),
+		PaddingLeft = UDim.new(0, 1),
+		PaddingRight = UDim.new(0, 1),
+	})
+	local Body = New("Frame", {
+		Parent = Accent,
+		BackgroundColor3 = "Body",
+		BorderColor3 = "Border",
+		BackgroundTransparency = 0.76,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+	})
+	New("UIPadding", {
+		Parent = Body,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 4),
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 6),
+	})
+	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+
+	New("TextLabel", {
+		Parent = Body,
+		Name = "Title",
+		Text = info.Title,
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(0, 12),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = -1,
+	})
+
+	Library:MakeDraggable(Outline, Body)
+
+	local StatusList = {
+		Holder = Outline,
+		Body = Body,
+		Items = {},
+		HideInactive = info.HideInactive and true or false,
+		_wantVisible = info.Visible and true or false,
+		_counter = 0,
+	}
+
+	function StatusList:_refreshVisibility()
+		if self.HideInactive and #self.Items == 0 then
+			Outline.Visible = false
+		else
+			Outline.Visible = self._wantVisible
+		end
+	end
+
+	function StatusList:AddItem(text, color)
+		local order = self._counter
+		self._counter = order + 1
+		local label = New("TextLabel", {
+			Parent = Body,
+			Name = "Item",
+			Text = tostring(text),
+			TextColor3 = color or "FontColor", -- explicit Color3 = literal override; nil = theme-tracked
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(0, 14),
+			AutomaticSize = Enum.AutomaticSize.X,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = order,
+		})
+		local item = { Label = label }
+		function item:SetText(t)
+			label.Text = tostring(t)
+		end
+		function item:SetColor(c)
+			label.TextColor3 = c
+		end
+		function item:Remove()
+			pcall(function()
+				label:Destroy()
+			end)
+			for i, it in StatusList.Items do
+				if it == item then
+					table.remove(StatusList.Items, i)
+					break
+				end
+			end
+			StatusList:_refreshVisibility()
+		end
+		table.insert(self.Items, item)
+		self:_refreshVisibility()
+		return item
+	end
+
+	function StatusList:Clear()
+		for _, item in self.Items do
+			if item.Label then
+				pcall(function()
+					item.Label:Destroy()
+				end)
+			end
+		end
+		table.clear(self.Items)
+		self._counter = 0
+		self:_refreshVisibility()
+	end
+
+	function StatusList:SetVisible(v)
+		self._wantVisible = v and true or false
+		self:_refreshVisibility()
+	end
+	function StatusList:SetHideInactive(v)
+		self.HideInactive = v and true or false
+		self:_refreshVisibility()
+	end
+
+	StatusList:_refreshVisibility()
+	Library.StatusList = StatusList
+	return StatusList
+end
+
 local KeybindShell, KeybindScroll
 local function ensureKeybindList()
 	if KeybindShell then
