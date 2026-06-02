@@ -1340,13 +1340,12 @@ function Funcs:AddToggle(idx, info)
 	Box.MouseButton1Click:Connect(flip)
 
 	MakeRecolorable(Toggle, Label, "DimColor")
+	-- no setInteractive: the flip guard already blocks clicks, and keeping it Interactable
+	-- lets the tooltip's MouseEnter still fire while greyed out
 	MakeDisableable(Toggle, {
 		{ Label, "TextTransparency", DISABLED_TEXT_FADE, 0 },
 		{ Fill, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
-	}, function(on)
-		Holder.Interactable = on
-		Box.Interactable = on
-	end)
+	})
 	if info.Disabled then
 		Toggle:SetDisabled(true)
 	end
