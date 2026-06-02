@@ -61,8 +61,9 @@ local Scheme = {
 	Pop = Color3.fromRGB(50, 50, 50),
 	White = Color3.fromRGB(255, 255, 255),
 	Divider = Color3.fromRGB(32, 32, 38),
-	-- semantic warning color; deliberately not in MasterShades so it stays red across theme swaps
+	-- semantic warning colors; deliberately not in MasterShades so they stay constant across theme swaps
 	Red = Color3.fromRGB(225, 65, 65),
+	Orange = Color3.fromRGB(235, 145, 40),
 
 	MainColor = Color3.fromRGB(38, 38, 38),
 	AccentColor = Color3.fromRGB(195, 33, 72),
