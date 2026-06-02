@@ -3456,7 +3456,7 @@ function Library:CreateStatusList(info)
 	})
 	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
-	-- title spans the box width (driven by the content below); stays on the transparent chrome
+	-- auto-size to its text (NEVER scale width inside an AutomaticSize parent — that blows the box up)
 	New("TextLabel", {
 		Parent = Body,
 		Name = "Title",
@@ -3464,18 +3464,18 @@ function Library:CreateStatusList(info)
 		TextColor3 = "FontColor",
 		TextStrokeTransparency = 0,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 12),
-		TextTruncate = Enum.TextTruncate.AtEnd,
+		Size = UDim2.fromOffset(0, 12),
+		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		LayoutOrder = -1,
 	})
 
-	-- solid filled surface the rows sit on (MainColor, theme-tracked); the rows drive the box width
+	-- solid filled surface the rows sit on (MainColor, theme-tracked); auto-sizes to hug the rows
 	local Content = New("Frame", {
 		Parent = Body,
 		BackgroundColor3 = "MainColor",
 		BorderColor3 = "Border",
-		Size = UDim2.fromOffset(120, 18),
+		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		LayoutOrder = 0,
 	})
