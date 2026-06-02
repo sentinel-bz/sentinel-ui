@@ -1019,6 +1019,7 @@ local function indexElement(self, row, text)
 		Reveal = self.Reveal,
 		Tab = self.Tab,
 		Record = self.Record,
+		Column = self.Column,
 		Dimmed = false,
 	}
 	table.insert(Library.SearchIndex, entry)
@@ -2517,7 +2518,7 @@ local function MakeGroupbox(side, name, tab)
 		})
 	end
 
-	local Groupbox = { Container = Content, Holder = Outline, Type = "Groupbox", Tab = tab }
+	local Groupbox = { Container = Content, Holder = Outline, Type = "Groupbox", Tab = tab, Column = side }
 	Groupbox.Reveal = function()
 		if tab then
 			tab:Show()
@@ -2599,7 +2600,7 @@ local function MakeTabbox(side, tab)
 			PaddingBottom = UDim.new(0, 8),
 		})
 
-		local SubTab = { Container = Content, Button = SelectButton, Tab = tab, Record = Tabbox.Record }
+		local SubTab = { Container = Content, Button = SelectButton, Tab = tab, Record = Tabbox.Record, Column = side }
 		SubTab.Reveal = function()
 			if tab then
 				tab:Show()
@@ -2700,6 +2701,44 @@ function Library:ResetSearch()
 	Library.Searching = false
 end
 
+-- bring a matched element into view by scrolling its column (Left/RightSide ScrollingFrame).
+-- deferred so a just-revealed tab/section has settled its layout before we read AbsolutePosition;
+-- the mock runs task.defer synchronously, so the scroll logic stays verifiable in the harness.
+local SEARCH_SCROLL_PAD = 8
+local function scrollEntryIntoView(entry)
+	if not entry then
+		return
+	end
+	local row = entry.Row
+	local column = entry.Column
+	if not column and row then
+		column = row:FindFirstAncestorOfClass("ScrollingFrame")
+	end
+	if not (row and column) then
+		return
+	end
+	local function apply()
+		local rowPos, rowSize = row.AbsolutePosition, row.AbsoluteSize
+		local colPos, colSize = column.AbsolutePosition, column.AbsoluteSize
+		if not (rowPos and rowSize and colPos and colSize) then
+			return
+		end
+		local canvas = column.CanvasPosition or Vector2.new(0, 0)
+		local rowTop = (rowPos.Y - colPos.Y) + canvas.Y
+		-- already fully within the visible window: leave the scroll where it is
+		if rowTop >= canvas.Y and (rowTop + rowSize.Y) <= (canvas.Y + colSize.Y) then
+			return
+		end
+		local target = math.max(0, rowTop - SEARCH_SCROLL_PAD)
+		column.CanvasPosition = Vector2.new(canvas.X, target)
+	end
+	if task and task.defer then
+		task.defer(apply)
+	else
+		apply()
+	end
+end
+
 function Library:UpdateSearch(query, enterPressed)
 	query = tostring(query or ""):gsub("^%s*(.-)%s*$", "%1"):lower()
 
@@ -2710,15 +2749,15 @@ function Library:UpdateSearch(query, enterPressed)
 
 	Library.Searching = true
 
-	local firstMatch, activeHasMatch = nil, false
+	local firstMatch, activeFirstMatch = nil, nil
 	for _, entry in Library.SearchIndex do
 		local matched = entry.Text:find(query, 1, true) ~= nil
 		entry.Dimmed = not matched
 		dimTree(entry.Row, not matched)
 		if matched then
 			firstMatch = firstMatch or entry
-			if entry.Tab == Library.ActiveTab then
-				activeHasMatch = true
+			if entry.Tab == Library.ActiveTab and not activeFirstMatch then
+				activeFirstMatch = entry
 			end
 		end
 	end
@@ -2734,8 +2773,18 @@ function Library:UpdateSearch(query, enterPressed)
 		dimChrome(record, not anyMatch)
 	end
 
-	if firstMatch and ((not activeHasMatch) or enterPressed) and firstMatch.Reveal then
-		firstMatch.Reveal()
+	-- surface the same match the jump policy targets, then scroll its column to it
+	local target
+	if firstMatch and ((not activeFirstMatch) or enterPressed) then
+		if firstMatch.Reveal then
+			firstMatch.Reveal()
+		end
+		target = firstMatch
+	elseif activeFirstMatch then
+		target = activeFirstMatch
+	end
+	if target then
+		scrollEntryIntoView(target)
 	end
 end
 
