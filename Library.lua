@@ -2617,7 +2617,8 @@ local function MakeTabbox(side, tab)
 			end
 			Content.Visible = true
 			SelectButton.TextColor3 = Library.Scheme.FontColor
-			Underline.Visible = true
+			-- a lone section is always "active"; its underline conveys nothing, so only show it with 2+
+			Underline.Visible = #Tabbox.Tabs > 1
 			Tabbox.ActiveTab = SubTab
 		end
 		SubTab.Underline = Underline
@@ -2629,6 +2630,10 @@ local function MakeTabbox(side, tab)
 		table.insert(Tabbox.Tabs, SubTab)
 		if not Tabbox.ActiveTab then
 			SubTab:Show()
+		end
+		-- this section may have taken the count from 1 -> 2; refresh the active underline accordingly
+		if Tabbox.ActiveTab then
+			Tabbox.ActiveTab.Underline.Visible = #Tabbox.Tabs > 1
 		end
 		return SubTab
 	end
