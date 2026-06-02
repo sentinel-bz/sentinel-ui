@@ -592,21 +592,33 @@ function Library:MakeDraggable(ui, dragFrame, isMainWindow)
 	end))
 end
 
-function Library:MakeResizable(ui, dragFrame, minSize, callback)
-	local startPos, frameSize
-	local dragging = false
+-- drag a corner handle to resize `ui` (offset size), clamped to min/max. returns a clamped
+-- setSize(w, h) so a consumer (or the harness) can drive a resize without real input.
+function Library:MakeResizable(ui, handle, minSize, maxSize)
+	minSize = minSize or Vector2.new(120, 80)
+	maxSize = maxSize or Vector2.new(800, 600)
+
+	local function setSize(w, h)
+		w = math.clamp(w, minSize.X, maxSize.X)
+		h = math.clamp(h, minSize.Y, maxSize.Y)
+		ui.Size = UDim2.fromOffset(w, h)
+		return w, h
+	end
+
+	local startPos, startSize
+	local resizing = false
 	local changed
 
-	dragFrame.InputBegan:Connect(function(input)
+	handle.InputBegan:Connect(function(input)
 		if not IsClickInput(input) then
 			return
 		end
 		startPos = input.Position
-		frameSize = ui.Size
-		dragging = true
+		startSize = ui.Size
+		resizing = true
 		changed = input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
+				resizing = false
 				if changed then
 					changed:Disconnect()
 					changed = nil
@@ -616,23 +628,17 @@ function Library:MakeResizable(ui, dragFrame, minSize, callback)
 	end)
 
 	Library:GiveSignal(UserInputService.InputChanged:Connect(function(input)
-		if not ui.Visible or not (ScreenGui and ScreenGui.Parent) then
-			dragging = false
+		if not (ScreenGui and ScreenGui.Parent) then
+			resizing = false
 			return
 		end
-		if dragging and IsHoverInput(input) then
+		if resizing and IsHoverInput(input) then
 			local delta = input.Position - startPos
-			ui.Size = UDim2.new(
-				frameSize.X.Scale,
-				math.clamp(frameSize.X.Offset + delta.X, minSize.X, math.huge),
-				frameSize.Y.Scale,
-				math.clamp(frameSize.Y.Offset + delta.Y, minSize.Y, math.huge)
-			)
-			if callback then
-				Library:SafeCallback(callback)
-			end
+			setSize(startSize.X.Offset + delta.X, startSize.Y.Offset + delta.Y)
 		end
 	end))
+
+	return setSize
 end
 
 local CurrentMenu
@@ -1648,166 +1654,6 @@ function Funcs:AddSlider(idx, info)
 	applyTooltip(Slider, info, Holder)
 	Library.Options[idx] = Slider
 	return Slider
-end
-
--- generic scrollable log view: the library owns the surface, the consumer feeds it lines.
--- lines are plain New() TextLabels (no hardcoded FontFace/TextSize) so SetFont/SetFontSize reach them.
-function Funcs:AddLogView(idx, info)
-	info = Library:Validate(info, {
-		MaxLines = 100,
-		Height = 80,
-		Visible = true,
-	})
-	local hasTitle = typeof(info.Title) == "string" and info.Title ~= ""
-	local titleSpace = hasTitle and 14 or 0
-
-	local Holder = New("Frame", {
-		Parent = self.Container,
-		Name = "LogView",
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, titleSpace + info.Height),
-		Visible = info.Visible,
-	})
-	if hasTitle then
-		New("TextLabel", {
-			Parent = Holder,
-			Text = info.Title,
-			TextColor3 = "DimColor",
-			TextStrokeTransparency = 0,
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 12),
-			TextXAlignment = Enum.TextXAlignment.Left,
-		})
-	end
-
-	local _, _, Body = MakePanel(Holder, UDim2.new(1, 0, 0, info.Height), UDim2.fromOffset(0, titleSpace))
-	local Scroll = New("ScrollingFrame", {
-		Parent = Body,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 1, 0),
-		CanvasSize = UDim2.fromOffset(0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = "Accent",
-		TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-		BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
-		ZIndex = 2,
-	})
-	New("UIListLayout", {
-		Parent = Scroll,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 1),
-	})
-	New("UIPadding", {
-		Parent = Scroll,
-		PaddingTop = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 2),
-		PaddingLeft = UDim.new(0, 3),
-		PaddingRight = UDim.new(0, 3),
-	})
-
-	local LogView = {
-		Type = "LogView",
-		Holder = Holder,
-		Scroll = Scroll,
-		Lines = {},
-		MaxLines = math.max(1, math.floor(info.MaxLines)),
-		_counter = 0,
-	}
-
-	-- pinned only when the user is already at/near the bottom; if they scrolled up to read, leave them
-	local function isAtBottom()
-		local ok, atBottom = pcall(function()
-			local canvas = Scroll.AbsoluteCanvasSize
-			local window = Scroll.AbsoluteWindowSize or Scroll.AbsoluteSize
-			local maxScroll = math.max(0, canvas.Y - window.Y)
-			return Scroll.CanvasPosition.Y >= maxScroll - 4
-		end)
-		return (not ok) or atBottom
-	end
-	local function pinBottom()
-		local function apply()
-			pcall(function()
-				Scroll.CanvasPosition = Vector2.new(0, 1e7)
-			end)
-		end
-		-- defer one step so the just-added line is laid out before we read/clamp the canvas
-		if task and task.defer then
-			task.defer(apply)
-		else
-			apply()
-		end
-	end
-
-	function LogView:Add(text)
-		text = tostring(text)
-		local pinned = isAtBottom()
-		local order = self._counter
-		self._counter = order + 1
-		local label = New("TextLabel", {
-			Parent = Scroll,
-			Name = "Line",
-			Text = text,
-			TextColor3 = "FontColor",
-			TextStrokeTransparency = 0,
-			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			TextWrapped = true,
-			LayoutOrder = order,
-		})
-		table.insert(self.Lines, { Text = text, Label = label })
-		while #self.Lines > self.MaxLines do
-			local oldest = table.remove(self.Lines, 1)
-			if oldest and oldest.Label then
-				pcall(function()
-					oldest.Label:Destroy()
-				end)
-			end
-		end
-		if pinned then
-			pinBottom()
-		end
-		return label
-	end
-
-	function LogView:Clear()
-		for _, line in self.Lines do
-			if line.Label then
-				pcall(function()
-					line.Label:Destroy()
-				end)
-			end
-		end
-		table.clear(self.Lines)
-		self._counter = 0
-	end
-
-	function LogView:SetLines(lines)
-		self:Clear()
-		if type(lines) == "table" then
-			for _, text in lines do
-				self:Add(text)
-			end
-		end
-	end
-
-	function LogView:GetLines()
-		local out = {}
-		for i, line in self.Lines do
-			out[i] = line.Text
-		end
-		return out
-	end
-
-	if idx ~= nil then
-		Library.Options[idx] = LogView
-	end
-	return LogView
 end
 
 function Funcs:AddDropdown(idx, info)
@@ -3376,6 +3222,181 @@ function Library:CreatePlayerList()
 
 	Library.PlayerList = PlayerList
 	return PlayerList
+end
+
+-- standalone floating, draggable + corner-resizable chat/log window (not a groupbox component).
+-- lines are plain New() TextLabels (no hardcoded font) so SetFont/SetFontSize keep reaching them.
+function Library:CreateChatLog(info)
+	info = Library:Validate(info or {}, {
+		Title = "chat",
+		MaxLines = 100,
+		Width = 300,
+		Height = 180,
+		Visible = false,
+	})
+
+	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(300, 300), info.Title)
+	shell.Outline.Visible = info.Visible and true or false
+
+	-- drag only via the header strip, so the scroll area + resize handle stay free input regions
+	local Header = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 5,
+	})
+	Library:MakeDraggable(shell.Outline, Header)
+
+	local _, _, body = MakePanel(shell.Body, UDim2.new(1, 0, 1, -18), UDim2.fromOffset(0, 18))
+	local Scroll = New("ScrollingFrame", {
+		Parent = body,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+		TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+		BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
+	})
+	New("UIListLayout", { Parent = Scroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1) })
+	New("UIPadding", {
+		Parent = Scroll,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 3),
+		PaddingRight = UDim.new(0, 3),
+	})
+
+	-- bottom-right resize grip; Active so it sinks input (doesn't scroll/drag underneath)
+	local ResizeHandle = New("Frame", {
+		Parent = shell.Outline,
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -1, 1, -1),
+		Size = UDim2.fromOffset(10, 10),
+		ZIndex = 20,
+		Active = true,
+	})
+
+	local ChatLog = {
+		Holder = shell.Outline,
+		Scroll = Scroll,
+		Header = Header,
+		ResizeHandle = ResizeHandle,
+		Lines = {},
+		MaxLines = math.max(1, math.floor(info.MaxLines)),
+		_counter = 0,
+	}
+
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(160, 90), Vector2.new(720, 540))
+
+	-- pinned only when the user is already at/near the bottom; if they scrolled up, leave them
+	local function isAtBottom()
+		local ok, atBottom = pcall(function()
+			local canvas = Scroll.AbsoluteCanvasSize
+			local window = Scroll.AbsoluteWindowSize or Scroll.AbsoluteSize
+			local maxScroll = math.max(0, canvas.Y - window.Y)
+			return Scroll.CanvasPosition.Y >= maxScroll - 4
+		end)
+		return (not ok) or atBottom
+	end
+	local function pinBottom()
+		local function apply()
+			pcall(function()
+				Scroll.CanvasPosition = Vector2.new(0, 1e7)
+			end)
+		end
+		if task and task.defer then
+			task.defer(apply)
+		else
+			apply()
+		end
+	end
+
+	function ChatLog:Add(text)
+		text = tostring(text)
+		local pinned = isAtBottom()
+		local order = self._counter
+		self._counter = order + 1
+		local label = New("TextLabel", {
+			Parent = Scroll,
+			Name = "Line",
+			Text = text,
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+			LayoutOrder = order,
+		})
+		table.insert(self.Lines, { Text = text, Label = label })
+		while #self.Lines > self.MaxLines do
+			local oldest = table.remove(self.Lines, 1)
+			if oldest and oldest.Label then
+				pcall(function()
+					oldest.Label:Destroy()
+				end)
+			end
+		end
+		if pinned then
+			pinBottom()
+		end
+		return label
+	end
+
+	function ChatLog:Clear()
+		for _, line in self.Lines do
+			if line.Label then
+				pcall(function()
+					line.Label:Destroy()
+				end)
+			end
+		end
+		table.clear(self.Lines)
+		self._counter = 0
+	end
+
+	function ChatLog:SetLines(lines)
+		self:Clear()
+		if type(lines) == "table" then
+			for _, text in lines do
+				self:Add(text)
+			end
+		end
+	end
+
+	function ChatLog:GetLines()
+		local out = {}
+		for i, line in self.Lines do
+			out[i] = line.Text
+		end
+		return out
+	end
+
+	-- resize by a delta from the current size (clamped); the corner handle drives the same setSize
+	function ChatLog:Resize(dx, dy)
+		return setSize(shell.Outline.Size.X.Offset + (dx or 0), shell.Outline.Size.Y.Offset + (dy or 0))
+	end
+
+	function ChatLog:SetVisible(v)
+		shell.Outline.Visible = v and true or false
+	end
+	function ChatLog:Show()
+		self:SetVisible(true)
+	end
+	function ChatLog:Hide()
+		self:SetVisible(false)
+	end
+
+	Library.ChatLog = ChatLog
+	return ChatLog
 end
 
 local KeybindShell, KeybindScroll

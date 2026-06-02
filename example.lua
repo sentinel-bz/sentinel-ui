@@ -18,6 +18,12 @@ local Window = Library:CreateWindow({
 	ToggleKeybind = Enum.KeyCode.RightControl,
 })
 
+-- standalone floating chat log: draggable by its header, resizable from the bottom-right corner
+local ChatLog = Library:CreateChatLog({ Title = "chat log", MaxLines = 12, Visible = true })
+for i = 1, 20 do
+	ChatLog:Add(("[%02d] player%d: sample chat message %d"):format(i, i % 5, i))
+end
+
 local Aimbot = Window:AddTab("Aimbot")
 local Visuals = Window:AddTab("Visuals")
 Window:AddTab("Settings")
@@ -106,10 +112,13 @@ Right:AddDivider()
 Right:AddToggle("AnotherToggle", { Text = "another toggle", Default = true })
 
 Right:AddDivider()
-local ChatLog = Right:AddLogView("ChatLog", { Title = "Chat Log", MaxLines = 12, Height = 70 })
-for i = 1, 20 do
-	ChatLog:Add(("[%02d] player%d: sample chat message %d"):format(i, i % 5, i))
-end
+Right:AddToggle("ShowChatLog", {
+	Text = "show chat log",
+	Default = true,
+	Callback = function(on)
+		ChatLog:SetVisible(on)
+	end,
+})
 
 local Tabbox = Visuals:AddLeftTabbox()
 local SecA = Tabbox:AddTab("Section1")
