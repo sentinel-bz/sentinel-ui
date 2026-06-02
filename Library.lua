@@ -3456,6 +3456,7 @@ function Library:CreateStatusList(info)
 	})
 	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
+	-- title spans the box width (driven by the content below); stays on the transparent chrome
 	New("TextLabel", {
 		Parent = Body,
 		Name = "Title",
@@ -3463,10 +3464,28 @@ function Library:CreateStatusList(info)
 		TextColor3 = "FontColor",
 		TextStrokeTransparency = 0,
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(0, 12),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(1, 0, 0, 12),
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		LayoutOrder = -1,
+	})
+
+	-- solid filled surface the rows sit on (MainColor, theme-tracked); the rows drive the box width
+	local Content = New("Frame", {
+		Parent = Body,
+		BackgroundColor3 = "MainColor",
+		BorderColor3 = "Border",
+		Size = UDim2.fromOffset(120, 18),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		LayoutOrder = 0,
+	})
+	New("UIListLayout", { Parent = Content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+	New("UIPadding", {
+		Parent = Content,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 3),
+		PaddingRight = UDim.new(0, 3),
 	})
 
 	Library:MakeDraggable(Outline, Body)
@@ -3474,6 +3493,7 @@ function Library:CreateStatusList(info)
 	local StatusList = {
 		Holder = Outline,
 		Body = Body,
+		Content = Content,
 		Items = {},
 		HideInactive = info.HideInactive and true or false,
 		_wantVisible = info.Visible and true or false,
@@ -3492,7 +3512,7 @@ function Library:CreateStatusList(info)
 		local order = self._counter
 		self._counter = order + 1
 		local label = New("TextLabel", {
-			Parent = Body,
+			Parent = Content,
 			Name = "Item",
 			Text = tostring(text),
 			TextColor3 = color or "FontColor", -- explicit Color3 = literal override; nil = theme-tracked
