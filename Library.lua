@@ -3407,104 +3407,104 @@ function Library:CreateStatusList(info)
 		Title = "status",
 		Visible = true,
 		HideInactive = false,
+		Width = 150,
+		Height = 70,
 	})
 
-	-- layered border chrome, all AutomaticSize so the box grows to fit its content
-	local Outline = New("Frame", {
+	-- two stacked borderless blocks (accent title bar + MainColor content) — NO surrounding frame
+	local Holder = New("Frame", {
 		Parent = ScreenGui,
-		BackgroundColor3 = "Outline",
-		BorderColor3 = "Border",
+		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(16, 440),
-		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
+		Size = UDim2.fromOffset(info.Width, info.Height),
+		Visible = info.Visible,
 	})
-	New("UIPadding", {
-		Parent = Outline,
-		PaddingTop = UDim.new(0, 1),
-		PaddingBottom = UDim.new(0, 1),
-		PaddingLeft = UDim.new(0, 1),
-		PaddingRight = UDim.new(0, 1),
-	})
-	local Accent = New("Frame", {
-		Parent = Outline,
-		BackgroundColor3 = "Accent",
-		BorderColor3 = "Border",
-		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
-	})
-	New("UIPadding", {
-		Parent = Accent,
-		PaddingTop = UDim.new(0, 1),
-		PaddingBottom = UDim.new(0, 1),
-		PaddingLeft = UDim.new(0, 1),
-		PaddingRight = UDim.new(0, 1),
-	})
-	local Body = New("Frame", {
-		Parent = Accent,
-		BackgroundColor3 = "Body",
-		BorderColor3 = "Border",
-		BackgroundTransparency = 0.76,
-		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
-	})
-	New("UIPadding", {
-		Parent = Body,
-		PaddingTop = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 4),
-		PaddingLeft = UDim.new(0, 4),
-		PaddingRight = UDim.new(0, 6),
-	})
-	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
-	-- auto-size to its text (NEVER scale width inside an AutomaticSize parent — that blows the box up)
-	New("TextLabel", {
-		Parent = Body,
+	local TitleBar = New("Frame", {
+		Parent = Holder,
+		BackgroundColor3 = "Accent",
+		Size = UDim2.new(1, 0, 0, 16),
+	})
+	local Title = New("TextLabel", {
+		Parent = TitleBar,
 		Name = "Title",
 		Text = info.Title,
 		TextColor3 = "FontColor",
 		TextStrokeTransparency = 0,
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(0, 12),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.fromOffset(4, 0),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		LayoutOrder = -1,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 
-	-- solid filled surface the rows sit on (MainColor, theme-tracked); auto-sizes to hug the rows
 	local Content = New("Frame", {
-		Parent = Body,
+		Parent = Holder,
 		BackgroundColor3 = "MainColor",
-		BorderColor3 = "Border",
-		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
-		LayoutOrder = 0,
+		Position = UDim2.fromOffset(0, 16),
+		Size = UDim2.new(1, 0, 1, -16),
+		ClipsDescendants = true,
 	})
-	New("UIListLayout", { Parent = Content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+	New("UIListLayout", { Parent = Content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1) })
 	New("UIPadding", {
 		Parent = Content,
 		PaddingTop = UDim.new(0, 2),
-		PaddingBottom = UDim.new(0, 2),
-		PaddingLeft = UDim.new(0, 3),
-		PaddingRight = UDim.new(0, 3),
+		PaddingLeft = UDim.new(0, 4),
+		PaddingRight = UDim.new(0, 4),
 	})
 
-	Library:MakeDraggable(Outline, Body)
+	-- drag via the title bar only (leaves the corner handle as a separate input region)
+	Library:MakeDraggable(Holder, TitleBar)
+
+	local ResizeHandle = New("Frame", {
+		Parent = Holder,
+		BackgroundColor3 = "Accent",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 0, 1, 0),
+		Size = UDim2.fromOffset(10, 10),
+		ZIndex = 10,
+		Active = true,
+	})
+	local setSize = Library:MakeResizable(Holder, ResizeHandle, Vector2.new(120, 44), Vector2.new(440, 340))
 
 	local StatusList = {
-		Holder = Outline,
-		Body = Body,
+		Holder = Holder,
+		TitleBar = TitleBar,
 		Content = Content,
+		ResizeHandle = ResizeHandle,
 		Items = {},
 		HideInactive = info.HideInactive and true or false,
 		_wantVisible = info.Visible and true or false,
 		_counter = 0,
+		_textSize = 12,
 	}
+
+	-- the text grows with the box height (so resizing scales the title + rows), clamped to a cap;
+	-- the title bar + content reflow to fit. (intentional per-box text size override.)
+	local MIN_TEXT, MAX_TEXT = 12, 26
+	local function applyScale()
+		local h = Holder.Size.Y.Offset
+		local ts = math.clamp(math.floor(h * 0.14), MIN_TEXT, MAX_TEXT)
+		StatusList._textSize = ts
+		local titleH = ts + 4
+		Title.TextSize = ts
+		TitleBar.Size = UDim2.new(1, 0, 0, titleH)
+		Content.Position = UDim2.fromOffset(0, titleH)
+		Content.Size = UDim2.new(1, 0, 1, -titleH)
+		for _, item in StatusList.Items do
+			if item.Label then
+				item.Label.TextSize = ts
+			end
+		end
+	end
+	Library:GiveSignal(Holder:GetPropertyChangedSignal("Size"):Connect(applyScale))
 
 	function StatusList:_refreshVisibility()
 		if self.HideInactive and #self.Items == 0 then
-			Outline.Visible = false
+			Holder.Visible = false
 		else
-			Outline.Visible = self._wantVisible
+			Holder.Visible = self._wantVisible
 		end
 	end
 
@@ -3518,9 +3518,11 @@ function Library:CreateStatusList(info)
 			TextColor3 = color or "FontColor", -- explicit Color3 = literal override; nil = theme-tracked
 			TextStrokeTransparency = 0,
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(0, 14),
-			AutomaticSize = Enum.AutomaticSize.X,
+			TextSize = self._textSize,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = true,
 			LayoutOrder = order,
 		})
 		local item = { Label = label }
@@ -3568,7 +3570,14 @@ function Library:CreateStatusList(info)
 		self.HideInactive = v and true or false
 		self:_refreshVisibility()
 	end
+	-- resize by a delta from the current size (clamped); the corner handle drives the same setSize
+	function StatusList:Resize(dx, dy)
+		setSize(Holder.Size.X.Offset + (dx or 0), Holder.Size.Y.Offset + (dy or 0))
+		applyScale()
+		return Holder.Size.X.Offset, Holder.Size.Y.Offset
+	end
 
+	applyScale()
 	StatusList:_refreshVisibility()
 	Library.StatusList = StatusList
 	return StatusList
