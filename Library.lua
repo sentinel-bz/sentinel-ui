@@ -2122,6 +2122,8 @@ function BaseAddons:AddKeyPicker(idx, info)
 		Library:SafeCallback(KeyPicker.ChangedCallback, KeyPicker.Value, KeyPicker.Bind)
 	end
 
+	local syncToggle = (info.SyncToggleState and self.Type == "Toggle") and self or nil
+
 	local function fireState()
 		local state = KeyPicker:GetState()
 		Library:SafeCallback(KeyPicker.Callback, state)
@@ -2175,7 +2177,11 @@ function BaseAddons:AddKeyPicker(idx, info)
 		end
 		if KeyPicker.Mode == "Toggle" then
 			KeyPicker.Toggled = not KeyPicker.Toggled
-			fireState()
+			if syncToggle then
+				syncToggle:SetValue(KeyPicker.Toggled)
+			else
+				fireState()
+			end
 		elseif KeyPicker.Mode == "Hold" or KeyPicker.Mode == "Press" then
 			-- Press: one-shot action fired on key-down (GetState stays false, no toggle state)
 			fireState()
@@ -2196,6 +2202,13 @@ function BaseAddons:AddKeyPicker(idx, info)
 	}, function(on)
 		Picker.Interactable = on
 	end)
+
+	if syncToggle then
+		syncToggle:OnChanged(function()
+			KeyPicker.Toggled = syncToggle.Value
+			Library:UpdateKeybindRow(KeyPicker)
+		end)
+	end
 
 	KeyPicker:SetValue(info.Default)
 	Library.Options[idx] = KeyPicker
