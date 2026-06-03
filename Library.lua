@@ -3442,6 +3442,21 @@ function Library:CreateMacroCreator(info)
 	})
 	Library:MakeDraggable(shell.Outline, Header)
 
+	local CloseBtn = New("TextButton", {
+		Parent = shell.Body,
+		Text = "x",
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0.5,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		BorderSizePixel = 1,
+		AutoButtonColor = false,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 1),
+		Size = UDim2.fromOffset(14, 14),
+		ZIndex = 8,
+	})
+
 	local Toolbar = New("Frame", {
 		Parent = shell.Body,
 		BackgroundTransparency = 1,
@@ -3899,10 +3914,16 @@ function Library:CreateMacroCreator(info)
 	function Macro:Hide()
 		self:SetVisible(false)
 	end
+	function Macro:Toggle()
+		self:SetVisible(not shell.Outline.Visible)
+	end
 	function Macro:Resize(dx, dy)
 		return setSize(shell.Outline.Size.X.Offset + (dx or 0), shell.Outline.Size.Y.Offset + (dy or 0))
 	end
 
+	CloseBtn.MouseButton1Click:Connect(function()
+		Macro:Hide()
+	end)
 	AddBtn.MouseButton1Click:Connect(function()
 		Menu.Visible = not Menu.Visible
 	end)
