@@ -3506,17 +3506,16 @@ function Library:CreateStatusList(info)
 
 	Library:MakeDraggable(Outline, Body)
 
-	-- drag grip pinned to the bottom-right; scale-anchored so it never inflates the AutomaticSize chain
+	-- invisible drag hitbox pinned to the bottom-right; scale-anchored so it never inflates the AutomaticSize chain
 	local Handle = New("TextButton", {
 		Parent = Outline,
 		Name = "ResizeGrip",
 		Text = "",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -1, 1, -1),
-		Size = UDim2.fromOffset(9, 9),
-		BackgroundColor3 = "Accent",
-		BorderColor3 = "Border",
-		BackgroundTransparency = 0.15,
+		Size = UDim2.fromOffset(12, 12),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		ZIndex = 6,
 	})
