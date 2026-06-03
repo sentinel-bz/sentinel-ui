@@ -30,6 +30,29 @@ Status:AddItem("farming: active")
 Status:AddItem("alert: enemy nearby", Color3.fromRGB(255, 80, 80))
 Status:AddItem("ping: 42ms")
 
+-- standalone macro-creator window: editable step sequence; save/load round-trips an in-memory table
+local savedMacro = {}
+local Macro = Library:CreateMacroCreator({
+	Title = "macro creator",
+	Visible = false,
+	OnSave = function(sequence)
+		savedMacro = sequence
+		print("macro saved:", #sequence, "steps")
+	end,
+	OnLoad = function()
+		return savedMacro
+	end,
+})
+Macro:RegisterStepType("emote", {
+	Label = "Emote",
+	Color = Color3.fromRGB(120, 200, 255),
+	Fields = { { Key = "name", Kind = "text", Default = "wave", Width = 80 } },
+})
+Macro:AddStep("wait", { duration = 0.5 })
+Macro:AddStep("click", { button = "left" })
+Macro:AddStep("emote", { name = "dance" })
+Macro:AddStep("comment", { text = "combo finisher" })
+
 local Aimbot = Window:AddTab("Aimbot")
 local Visuals = Window:AddTab("Visuals")
 Window:AddTab("Settings")
@@ -125,6 +148,9 @@ Right:AddToggle("ShowChatLog", {
 		ChatLog:SetVisible(on)
 	end,
 })
+Right:AddButton({ Text = "open macro creator", Func = function()
+	Macro:Show()
+end })
 Right:AddToggle("ShowStatus", {
 	Text = "show status list",
 	Default = true,

@@ -3417,6 +3417,521 @@ function Library:CreateChatLog(info)
 	return ChatLog
 end
 
+-- standalone macro-creator window: an editable step sequence. domain-neutral — the library knows
+-- nothing about what a step *does*; it builds the editor, ships generic step types (wait/key/click/
+-- comment), and lets the consumer RegisterStepType + drive execution off GetSequence(). file I/O is
+-- the consumer's job via OnSave/OnLoad. rows use plain New() (no hardcoded font) so SetFont reaches them.
+function Library:CreateMacroCreator(info)
+	info = info or {}
+	local onSave, onLoad = info.OnSave, info.OnLoad
+	info = Library:Validate(info, {
+		Title = "macro creator",
+		Width = 320,
+		Height = 320,
+		Visible = false,
+	})
+
+	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(330, 120), info.Title)
+	shell.Outline.Visible = info.Visible and true or false
+
+	local Header = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 5,
+	})
+	Library:MakeDraggable(shell.Outline, Header)
+
+	local Toolbar = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 18),
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 6,
+	})
+	New("UIListLayout", {
+		Parent = Toolbar,
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 3),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local function toolButton(text, width)
+		return New("TextButton", {
+			Parent = Toolbar,
+			Text = text,
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			AutoButtonColor = false,
+			Size = UDim2.new(0, width, 0, 15),
+			ZIndex = 7,
+		})
+	end
+	local AddBtn = toolButton("+ Add", 50)
+	local SaveBtn = toolButton("Save", 44)
+	local LoadBtn = toolButton("Load", 44)
+	local ClearBtn = toolButton("Clear", 44)
+
+	local _, _, listBody = MakePanel(shell.Body, UDim2.new(1, 0, 1, -38), UDim2.fromOffset(0, 38))
+	local Scroll = New("ScrollingFrame", {
+		Parent = listBody,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+	})
+	New("UIListLayout", { Parent = Scroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+	New("UIPadding", {
+		Parent = Scroll,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 3),
+	})
+
+	-- add-step popup: a small floating menu of every registered type, toggled by the Add button
+	local Menu = New("Frame", {
+		Parent = shell.Outline,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		BorderSizePixel = 1,
+		Position = UDim2.fromOffset(5, 55),
+		Size = UDim2.fromOffset(112, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		ZIndex = 40,
+	})
+	local MenuInner = New("Frame", {
+		Parent = Menu,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ZIndex = 41,
+	})
+	New("UIListLayout", { Parent = MenuInner, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 1) })
+	New("UIPadding", {
+		Parent = MenuInner,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 2),
+	})
+
+	local ResizeHandle = New("Frame", {
+		Parent = shell.Outline,
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -1, 1, -1),
+		Size = UDim2.fromOffset(10, 10),
+		ZIndex = 50,
+		Active = true,
+	})
+
+	local Macro = {
+		Holder = shell.Outline,
+		Scroll = Scroll,
+		Header = Header,
+		ResizeHandle = ResizeHandle,
+		Steps = {},
+		StepTypes = {},
+		_order = {},
+		OnSave = onSave,
+		OnLoad = onLoad,
+	}
+
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(230, 170), Vector2.new(560, 560))
+
+	local KEY_NONE = "None"
+	local activeCapture
+	Library:GiveSignal(UserInputService.InputBegan:Connect(function(input)
+		if activeCapture and input.UserInputType == Enum.UserInputType.Keyboard then
+			local name = input.KeyCode == Enum.KeyCode.Escape and KEY_NONE or input.KeyCode.Name
+			activeCapture(name)
+			activeCapture = nil
+		end
+	end))
+
+	-- field editor; writes straight back into step.data[field.Key] on edit. no hardcoded font.
+	local function makeEditor(parent, field, step)
+		local kind = field.Kind
+		if kind == "number" or kind == "text" then
+			local box = New("TextBox", {
+				Parent = parent,
+				Text = tostring(step.data[field.Key] ~= nil and step.data[field.Key] or (field.Default ~= nil and field.Default or "")),
+				PlaceholderText = field.Placeholder or "",
+				PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Element",
+				BorderColor3 = "ElementBorder",
+				BorderSizePixel = 1,
+				ClearTextOnFocus = false,
+				Size = UDim2.new(0, field.Width or 44, 0, 14),
+				ZIndex = 12,
+			})
+			box.FocusLost:Connect(function()
+				if kind == "number" then
+					local n = tonumber(box.Text)
+					if n == nil then
+						n = field.Default or 0
+					end
+					step.data[field.Key] = n
+					box.Text = tostring(n)
+				else
+					step.data[field.Key] = box.Text
+				end
+			end)
+			return box
+		elseif kind == "choice" then
+			local options = field.Options or { "a", "b" }
+			step.data[field.Key] = step.data[field.Key] or field.Default or options[1]
+			local btn = New("TextButton", {
+				Parent = parent,
+				Text = tostring(step.data[field.Key]),
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Element",
+				BorderColor3 = "ElementBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.new(0, field.Width or 44, 0, 14),
+				ZIndex = 12,
+			})
+			btn.MouseButton1Click:Connect(function()
+				local idx = table.find(options, step.data[field.Key]) or 0
+				local nextOpt = options[(idx % #options) + 1]
+				step.data[field.Key] = nextOpt
+				btn.Text = tostring(nextOpt)
+			end)
+			return btn
+		elseif kind == "key" then
+			step.data[field.Key] = step.data[field.Key] or field.Default or KEY_NONE
+			local btn = New("TextButton", {
+				Parent = parent,
+				Text = "[" .. tostring(step.data[field.Key]) .. "]",
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Element",
+				BorderColor3 = "ElementBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.new(0, field.Width or 58, 0, 14),
+				ZIndex = 12,
+			})
+			btn.MouseButton1Click:Connect(function()
+				btn.Text = "[...]"
+				activeCapture = function(name)
+					step.data[field.Key] = name
+					btn.Text = "[" .. name .. "]"
+				end
+			end)
+			return btn
+		end
+	end
+
+	local function indexOf(s)
+		for i, st in ipairs(Macro.Steps) do
+			if st == s then
+				return i
+			end
+		end
+		return nil
+	end
+	local function renumber()
+		for i, st in ipairs(Macro.Steps) do
+			st.Row.LayoutOrder = i
+			if st._index then
+				st._index.Text = i .. "."
+			end
+		end
+	end
+
+	local function buildMenu()
+		for _, c in MenuInner:GetChildren() do
+			if c:IsA("TextButton") then
+				c:Destroy()
+			end
+		end
+		for order, name in ipairs(Macro._order) do
+			local cfg = Macro.StepTypes[name]
+			local b = New("TextButton", {
+				Parent = MenuInner,
+				Text = cfg.Label or name,
+				TextColor3 = cfg.Color or "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Element",
+				BorderColor3 = "ElementBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.new(1, 0, 0, 15),
+				LayoutOrder = order,
+				ZIndex = 42,
+			})
+			b.MouseButton1Click:Connect(function()
+				Macro:AddStep(name)
+				Menu.Visible = false
+			end)
+		end
+	end
+
+	local function makeRow(step)
+		local row = New("Frame", {
+			Parent = Scroll,
+			Name = "Step",
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			Size = UDim2.new(1, 0, 0, 18),
+		})
+		step.Row = row
+		step._index = New("TextLabel", {
+			Parent = row,
+			Name = "Index",
+			Text = "",
+			TextColor3 = "DimColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(3, 0),
+			Size = UDim2.fromOffset(16, 18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 11,
+		})
+		local left = New("Frame", {
+			Parent = row,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(20, 0),
+			Size = UDim2.new(1, -74, 1, 0),
+			ZIndex = 11,
+		})
+		New("UIListLayout", {
+			Parent = left,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local cfg = Macro.StepTypes[step.type] or { Label = step.type }
+		New("TextLabel", {
+			Parent = left,
+			Name = "Type",
+			Text = cfg.Label or step.type,
+			TextColor3 = cfg.Color or "FontColor",
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.new(0, 0, 1, 0),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 11,
+		})
+		for _, field in ipairs(cfg.Fields or {}) do
+			makeEditor(left, field, step)
+		end
+		local right = New("Frame", {
+			Parent = row,
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -2, 0.5, 0),
+			Size = UDim2.fromOffset(50, 16),
+			ZIndex = 11,
+		})
+		New("UIListLayout", {
+			Parent = right,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 2),
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local function actBtn(text, order)
+			return New("TextButton", {
+				Parent = right,
+				Text = text,
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Dark",
+				BorderColor3 = "DarkBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.fromOffset(15, 14),
+				LayoutOrder = order,
+				ZIndex = 12,
+			})
+		end
+		actBtn("^", 1).MouseButton1Click:Connect(function()
+			Macro:MoveStep(step, -1)
+		end)
+		actBtn("v", 2).MouseButton1Click:Connect(function()
+			Macro:MoveStep(step, 1)
+		end)
+		actBtn("x", 3).MouseButton1Click:Connect(function()
+			Macro:RemoveStep(step)
+		end)
+		return row
+	end
+
+	function Macro:RegisterStepType(name, config)
+		config = config or {}
+		if not self.StepTypes[name] then
+			table.insert(self._order, name)
+		end
+		self.StepTypes[name] = config
+		buildMenu()
+		return self
+	end
+
+	function Macro:AddStep(typeKey, data)
+		local cfg = self.StepTypes[typeKey]
+		if not cfg then
+			return nil
+		end
+		local step = { type = typeKey, data = {} }
+		for _, field in ipairs(cfg.Fields or {}) do
+			if data and data[field.Key] ~= nil then
+				step.data[field.Key] = data[field.Key]
+			else
+				step.data[field.Key] = field.Default
+			end
+		end
+		if data then
+			for k, v in data do
+				if k ~= "type" and step.data[k] == nil then
+					step.data[k] = v
+				end
+			end
+		end
+		makeRow(step)
+		table.insert(self.Steps, step)
+		renumber()
+		return step
+	end
+
+	function Macro:RemoveStep(ref)
+		local i = type(ref) == "number" and ref or indexOf(ref)
+		if not i then
+			return
+		end
+		local step = self.Steps[i]
+		if step and step.Row then
+			pcall(function()
+				step.Row:Destroy()
+			end)
+		end
+		table.remove(self.Steps, i)
+		renumber()
+	end
+
+	function Macro:MoveStep(ref, delta)
+		local i = type(ref) == "number" and ref or indexOf(ref)
+		if not i then
+			return
+		end
+		local j = i + delta
+		if j < 1 or j > #self.Steps then
+			return
+		end
+		self.Steps[i], self.Steps[j] = self.Steps[j], self.Steps[i]
+		renumber()
+	end
+
+	function Macro:GetSequence()
+		local out = {}
+		for _, st in ipairs(self.Steps) do
+			local s = { type = st.type }
+			for k, v in st.data do
+				s[k] = v
+			end
+			table.insert(out, s)
+		end
+		return out
+	end
+
+	function Macro:Clear()
+		for _, st in ipairs(self.Steps) do
+			if st.Row then
+				pcall(function()
+					st.Row:Destroy()
+				end)
+			end
+		end
+		table.clear(self.Steps)
+		renumber()
+	end
+
+	function Macro:SetSequence(list)
+		self:Clear()
+		if type(list) == "table" then
+			for _, s in ipairs(list) do
+				if type(s) == "table" and s.type then
+					self:AddStep(s.type, s)
+				end
+			end
+		end
+	end
+
+	function Macro:Save()
+		if self.OnSave then
+			Library:SafeCallback(self.OnSave, self:GetSequence())
+		end
+	end
+	function Macro:Load()
+		if self.OnLoad then
+			local seq = self.OnLoad()
+			if type(seq) == "table" then
+				self:SetSequence(seq)
+			end
+		end
+	end
+
+	function Macro:SetVisible(v)
+		shell.Outline.Visible = v and true or false
+		if not v then
+			Menu.Visible = false
+		end
+	end
+	function Macro:Show()
+		self:SetVisible(true)
+	end
+	function Macro:Hide()
+		self:SetVisible(false)
+	end
+	function Macro:Resize(dx, dy)
+		return setSize(shell.Outline.Size.X.Offset + (dx or 0), shell.Outline.Size.Y.Offset + (dy or 0))
+	end
+
+	AddBtn.MouseButton1Click:Connect(function()
+		Menu.Visible = not Menu.Visible
+	end)
+	SaveBtn.MouseButton1Click:Connect(function()
+		Macro:Save()
+	end)
+	LoadBtn.MouseButton1Click:Connect(function()
+		Macro:Load()
+	end)
+	ClearBtn.MouseButton1Click:Connect(function()
+		Macro:Clear()
+	end)
+
+	Macro:RegisterStepType("wait", { Label = "Wait", Color = Color3.fromRGB(255, 170, 0), Fields = { { Key = "duration", Kind = "number", Default = 0.1, Width = 38 } } })
+	Macro:RegisterStepType("keypress", { Label = "Key Press", Color = Color3.fromRGB(68, 221, 255), Fields = { { Key = "key", Kind = "key", Default = "None" } } })
+	Macro:RegisterStepType("click", { Label = "Click", Color = Color3.fromRGB(80, 255, 120), Fields = { { Key = "button", Kind = "choice", Options = { "left", "right" }, Default = "left", Width = 40 } } })
+	Macro:RegisterStepType("comment", { Label = "Comment", Color = Color3.fromRGB(150, 150, 150), Fields = { { Key = "text", Kind = "text", Default = "", Width = 130 } } })
+
+	if not Macro.OnSave then
+		SaveBtn.Visible = false
+	end
+	if not Macro.OnLoad then
+		LoadBtn.Visible = false
+	end
+
+	Library.MacroCreator = Macro
+	return Macro
+end
+
 -- standalone auto-sizing draggable status panel (like the KeybindList box). domain-neutral:
 -- the consumer feeds it text rows. rows are plain New() TextLabels (no hardcoded font) so
 -- SetFont/SetFontSize reach them; the box auto-sizes to its widest row + row count via AutomaticSize.
