@@ -851,10 +851,12 @@ function Library:SetNotifySide(side)
 end
 function Library:Notify(info, time)
 	local title, body, persist
+	local richText = false
 	if typeof(info) == "table" then
 		title = info.Title
 		body = info.Description
 		persist = info.Persist == true
+		richText = info.RichText == true
 		if info.Time ~= nil then
 			time = info.Time
 		end
@@ -941,6 +943,7 @@ function Library:Notify(info, time)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Size = UDim2.new(1, 0, 0, 14),
 		TextSize = 14,
+		RichText = richText,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
@@ -959,6 +962,7 @@ function Library:Notify(info, time)
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Size = UDim2.new(1, 0, 0, 12),
 			TextSize = 12,
+			RichText = richText,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextYAlignment = Enum.TextYAlignment.Top,
 			TextWrapped = true,
@@ -3459,7 +3463,6 @@ function Library:CreateStatusList(info)
 		BorderColor3 = "Border",
 		BackgroundTransparency = 0.76,
 		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
 	})
 	New("UIPadding", {
 		Parent = Body,
@@ -3471,7 +3474,8 @@ function Library:CreateStatusList(info)
 	})
 	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
-	-- auto-size to its text (NEVER scale width inside an AutomaticSize parent — that blows the box up)
+	-- width is set explicitly in _relayout (= widest of title/rows) so the title and the row surface
+	-- share one width and the accent border stays even; left-aligned text fills the rest
 	local Title = New("TextLabel", {
 		Parent = Body,
 		Name = "Title",
@@ -3481,18 +3485,16 @@ function Library:CreateStatusList(info)
 		BackgroundTransparency = 1,
 		TextSize = 12,
 		Size = UDim2.fromOffset(0, 12),
-		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		LayoutOrder = -1,
 	})
 
-	-- solid filled surface the rows sit on (MainColor, theme-tracked); auto-sizes to hug the rows
+	-- solid filled surface the rows sit on (MainColor, theme-tracked); width matches the title's
 	local Content = New("Frame", {
 		Parent = Body,
 		BackgroundColor3 = "MainColor",
 		BorderColor3 = "Border",
 		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
 		LayoutOrder = 0,
 	})
 	New("UIListLayout", { Parent = Content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
@@ -3521,12 +3523,16 @@ function Library:CreateStatusList(info)
 	})
 
 	local BASE_TITLE_TEXT, BASE_ROW_TEXT = 12, 13
+	local BASE_TITLE_H, BASE_ROW_H = 14, 16
+	local CONTENT_PAD = 3
 	local MIN_SCALE, MAX_SCALE = 0.6, 3
+	local MAX_BOX_W = 700 -- safety ceiling: a bad text measurement can never blow the box to full width
 
 	local StatusList = {
 		Holder = Outline,
 		Body = Body,
 		Content = Content,
+		Title = Title,
 		Items = {},
 		HideInactive = info.HideInactive and true or false,
 		_wantVisible = info.Visible and true or false,
@@ -3534,24 +3540,42 @@ function Library:CreateStatusList(info)
 		Scale = 1,
 	}
 
-	-- height is driven explicitly here, not by AutomaticSize.Y: the per-frame destroy/recreate of
-	-- rows defeats vertical auto-shrink and leaves the box stuck at its tallest past size
+	local function textWidth(label)
+		local ok, w = pcall(function()
+			return label.TextBounds.X
+		end)
+		return (ok and w) or 0
+	end
+
+	-- Title and rows share ONE width: innerW = widest of {title, rows} measured at base size then scaled,
+	-- and both Title and Content are set to innerW so neither leaves slack on the right (even accent
+	-- border, any row count). height + width derive from the continuous float scale (not the integer text
+	-- size), so a corner drag resizes the box smoothly. AutomaticSize is off on Body/Title/Content/rows.
 	function StatusList:_relayout()
 		local scale = self.Scale
+		Title.TextSize = BASE_TITLE_TEXT
+		local titleBaseW = math.ceil(textWidth(Title))
+		local rowsBaseW = 0
+		for _, item in self.Items do
+			item.Label.TextSize = BASE_ROW_TEXT
+			rowsBaseW = math.max(rowsBaseW, math.ceil(textWidth(item.Label)))
+		end
 		local titleText = math.floor(BASE_TITLE_TEXT * scale + 0.5)
 		local rowText = math.floor(BASE_ROW_TEXT * scale + 0.5)
-		local titleH = titleText + 2
-		local rowH = rowText + 3
-		Title.TextSize = titleText
-		Title.Size = UDim2.new(0, 0, 0, titleH)
+		local titleH = math.ceil(BASE_TITLE_H * scale)
+		local rowH = math.ceil(BASE_ROW_H * scale)
 		local n = #self.Items
+		local contentW = n > 0 and (math.ceil(rowsBaseW * scale) + CONTENT_PAD * 2) or 0
+		local innerW = math.clamp(math.max(math.ceil(titleBaseW * scale), contentW), 0, MAX_BOX_W)
+		Title.TextSize = titleText
+		Title.Size = UDim2.new(0, innerW, 0, titleH)
 		for _, item in self.Items do
 			item.Label.TextSize = rowText
-			item.Label.Size = UDim2.new(0, 0, 0, rowH)
+			item.Label.Size = UDim2.new(1, 0, 0, rowH)
 		end
 		local contentH = n > 0 and (4 + n * rowH + (n - 1) * 2) or 0
-		Content.Size = UDim2.new(0, 0, 0, contentH)
-		Body.Size = UDim2.new(0, 0, 0, titleH + contentH + 6)
+		Content.Size = UDim2.new(0, innerW, 0, contentH)
+		Body.Size = UDim2.new(0, innerW + 4, 0, titleH + contentH + 6)
 	end
 
 	function StatusList:SetScale(s)
@@ -3565,8 +3589,10 @@ function Library:CreateStatusList(info)
 		return self.Scale
 	end
 
+	-- continuous corner resize like the ChatLog: scale tracks the cursor proportionally to the live box
+	-- span every frame, so dragging feels smooth instead of stepping in fixed increments
 	do
-		local startPos, startScale
+		local startPos, startScale, startSpan
 		local resizing = false
 		local changed
 		Handle.InputBegan:Connect(function(input)
@@ -3575,6 +3601,8 @@ function Library:CreateStatusList(info)
 			end
 			startPos = input.Position
 			startScale = StatusList.Scale
+			local size = Outline.AbsoluteSize
+			startSpan = math.max(1, size.X + size.Y)
 			resizing = true
 			changed = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -3593,7 +3621,7 @@ function Library:CreateStatusList(info)
 			end
 			if resizing and IsHoverInput(input) then
 				local delta = input.Position - startPos
-				StatusList:SetScale(startScale + (delta.X + delta.Y) / 300)
+				StatusList:SetScale(startScale * (1 + (delta.X + delta.Y) / startSpan))
 			end
 		end))
 	end
@@ -3616,8 +3644,7 @@ function Library:CreateStatusList(info)
 			TextColor3 = color or "FontColor", -- explicit Color3 = literal override; nil = theme-tracked
 			TextStrokeTransparency = 0,
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(0, 14),
-			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.new(1, 0, 0, 14),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			LayoutOrder = order,
 		})
