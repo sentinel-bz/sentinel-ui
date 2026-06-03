@@ -3444,12 +3444,11 @@ function Library:CreateMacroCreator(info)
 
 	local CloseBtn = New("TextButton", {
 		Parent = shell.Body,
-		Text = "x",
+		Text = "✕",
 		TextColor3 = "FontColor",
 		TextStrokeTransparency = 0.5,
-		BackgroundColor3 = "Dark",
-		BorderColor3 = "DarkBorder",
-		BorderSizePixel = 1,
+		TextSize = 13,
+		BackgroundTransparency = 1,
 		AutoButtonColor = false,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 1),
@@ -3769,6 +3768,7 @@ function Library:CreateMacroCreator(info)
 				Text = text,
 				TextColor3 = "FontColor",
 				TextStrokeTransparency = 0.5,
+				TextSize = 12,
 				BackgroundColor3 = "Dark",
 				BorderColor3 = "DarkBorder",
 				BorderSizePixel = 1,
@@ -3778,13 +3778,13 @@ function Library:CreateMacroCreator(info)
 				ZIndex = 12,
 			})
 		end
-		actBtn("^", 1).MouseButton1Click:Connect(function()
+		actBtn("▲", 1).MouseButton1Click:Connect(function()
 			Macro:MoveStep(step, -1)
 		end)
-		actBtn("v", 2).MouseButton1Click:Connect(function()
+		actBtn("▼", 2).MouseButton1Click:Connect(function()
 			Macro:MoveStep(step, 1)
 		end)
-		actBtn("x", 3).MouseButton1Click:Connect(function()
+		actBtn("✕", 3).MouseButton1Click:Connect(function()
 			Macro:RemoveStep(step)
 		end)
 		return row
