@@ -3459,7 +3459,7 @@ function Library:CreateStatusList(info)
 		BorderColor3 = "Border",
 		BackgroundTransparency = 0.76,
 		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
+		AutomaticSize = Enum.AutomaticSize.X,
 	})
 	New("UIPadding", {
 		Parent = Body,
@@ -3472,13 +3472,14 @@ function Library:CreateStatusList(info)
 	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
 	-- auto-size to its text (NEVER scale width inside an AutomaticSize parent — that blows the box up)
-	New("TextLabel", {
+	local Title = New("TextLabel", {
 		Parent = Body,
 		Name = "Title",
 		Text = info.Title,
 		TextColor3 = "FontColor",
 		TextStrokeTransparency = 0,
 		BackgroundTransparency = 1,
+		TextSize = 12,
 		Size = UDim2.fromOffset(0, 12),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -3491,7 +3492,7 @@ function Library:CreateStatusList(info)
 		BackgroundColor3 = "MainColor",
 		BorderColor3 = "Border",
 		Size = UDim2.fromOffset(0, 0),
-		AutomaticSize = Enum.AutomaticSize.XY,
+		AutomaticSize = Enum.AutomaticSize.X,
 		LayoutOrder = 0,
 	})
 	New("UIListLayout", { Parent = Content, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
@@ -3505,6 +3506,24 @@ function Library:CreateStatusList(info)
 
 	Library:MakeDraggable(Outline, Body)
 
+	-- drag grip pinned to the bottom-right; scale-anchored so it never inflates the AutomaticSize chain
+	local Handle = New("TextButton", {
+		Parent = Outline,
+		Name = "ResizeGrip",
+		Text = "",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -1, 1, -1),
+		Size = UDim2.fromOffset(9, 9),
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		BackgroundTransparency = 0.15,
+		AutoButtonColor = false,
+		ZIndex = 6,
+	})
+
+	local BASE_TITLE_TEXT, BASE_ROW_TEXT = 12, 13
+	local MIN_SCALE, MAX_SCALE = 0.6, 3
+
 	local StatusList = {
 		Holder = Outline,
 		Body = Body,
@@ -3513,7 +3532,72 @@ function Library:CreateStatusList(info)
 		HideInactive = info.HideInactive and true or false,
 		_wantVisible = info.Visible and true or false,
 		_counter = 0,
+		Scale = 1,
 	}
+
+	-- height is driven explicitly here, not by AutomaticSize.Y: the per-frame destroy/recreate of
+	-- rows defeats vertical auto-shrink and leaves the box stuck at its tallest past size
+	function StatusList:_relayout()
+		local scale = self.Scale
+		local titleText = math.floor(BASE_TITLE_TEXT * scale + 0.5)
+		local rowText = math.floor(BASE_ROW_TEXT * scale + 0.5)
+		local titleH = titleText + 2
+		local rowH = rowText + 3
+		Title.TextSize = titleText
+		Title.Size = UDim2.new(0, 0, 0, titleH)
+		local n = #self.Items
+		for _, item in self.Items do
+			item.Label.TextSize = rowText
+			item.Label.Size = UDim2.new(0, 0, 0, rowH)
+		end
+		local contentH = n > 0 and (4 + n * rowH + (n - 1) * 2) or 0
+		Content.Size = UDim2.new(0, 0, 0, contentH)
+		Body.Size = UDim2.new(0, 0, 0, titleH + contentH + 6)
+	end
+
+	function StatusList:SetScale(s)
+		self.Scale = math.clamp(tonumber(s) or self.Scale, MIN_SCALE, MAX_SCALE)
+		self:_relayout()
+		if self.OnScaleChanged then
+			Library:SafeCallback(self.OnScaleChanged, self.Scale)
+		end
+	end
+	function StatusList:GetScale()
+		return self.Scale
+	end
+
+	do
+		local startPos, startScale
+		local resizing = false
+		local changed
+		Handle.InputBegan:Connect(function(input)
+			if not IsClickInput(input) then
+				return
+			end
+			startPos = input.Position
+			startScale = StatusList.Scale
+			resizing = true
+			changed = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					resizing = false
+					if changed then
+						changed:Disconnect()
+						changed = nil
+					end
+				end
+			end)
+		end)
+		Library:GiveSignal(UserInputService.InputChanged:Connect(function(input)
+			if not (ScreenGui and ScreenGui.Parent) then
+				resizing = false
+				return
+			end
+			if resizing and IsHoverInput(input) then
+				local delta = input.Position - startPos
+				StatusList:SetScale(startScale + (delta.X + delta.Y) / 300)
+			end
+		end))
+	end
 
 	function StatusList:_refreshVisibility()
 		if self.HideInactive and #self.Items == 0 then
@@ -3555,9 +3639,11 @@ function Library:CreateStatusList(info)
 					break
 				end
 			end
+			StatusList:_relayout()
 			StatusList:_refreshVisibility()
 		end
 		table.insert(self.Items, item)
+		self:_relayout()
 		self:_refreshVisibility()
 		return item
 	end
@@ -3572,6 +3658,7 @@ function Library:CreateStatusList(info)
 		end
 		table.clear(self.Items)
 		self._counter = 0
+		self:_relayout()
 		self:_refreshVisibility()
 	end
 
@@ -3584,6 +3671,7 @@ function Library:CreateStatusList(info)
 		self:_refreshVisibility()
 	end
 
+	StatusList:_relayout()
 	StatusList:_refreshVisibility()
 	Library.StatusList = StatusList
 	return StatusList
