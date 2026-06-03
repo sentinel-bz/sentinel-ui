@@ -3739,8 +3739,9 @@ function Library:CreateMacroCreator(info)
 			TextColor3 = cfg.Color or "FontColor",
 			TextStrokeTransparency = 0,
 			BackgroundTransparency = 1,
+			-- min width so every type label reserves the same column → the editable fields line up
 			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.new(0, 0, 1, 0),
+			Size = UDim2.fromOffset(70, 18),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			ZIndex = 11,
 		})
