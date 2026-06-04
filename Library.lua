@@ -2001,6 +2001,7 @@ function BaseAddons:AddKeyPicker(idx, info)
 		Mode = "Toggle",
 		Modes = { "Always", "Toggle", "Hold" },
 		SyncToggleState = false,
+		NoUI = false,
 		Callback = function() end,
 		ChangedCallback = function() end,
 		Changed = function() end,
@@ -2211,7 +2212,9 @@ function BaseAddons:AddKeyPicker(idx, info)
 
 	KeyPicker:SetValue(info.Default)
 	Library.Options[idx] = KeyPicker
-	Library:AddKeybindRow(KeyPicker)
+	if not info.NoUI then
+		Library:AddKeybindRow(KeyPicker)
+	end
 	if self.SearchEntry and KeyPicker.Text then
 		self.SearchEntry.Text = self.SearchEntry.Text .. " " .. tostring(KeyPicker.Text):lower()
 	end
@@ -3412,11 +3415,11 @@ end
 -- standalone, domain-neutral macro-creator window: an editable step sequence the consumer drives off GetSequence()
 function Library:CreateMacroCreator(info)
 	info = info or {}
-	local onSave, onLoad = info.OnSave, info.OnLoad
+	local onSave, onLoad, onDelete = info.OnSave, info.OnLoad, info.OnDelete
 	info = Library:Validate(info, {
 		Title = "macro creator",
 		Width = 320,
-		Height = 320,
+		Height = 364,
 		Visible = false,
 	})
 
@@ -3445,10 +3448,94 @@ function Library:CreateMacroCreator(info)
 		ZIndex = 8,
 	})
 
+	-- name + saved-macro picker so the window is a self-contained editor (load/delete an existing macro)
+	local NameBox = New("TextBox", {
+		Parent = shell.Body,
+		Text = "",
+		PlaceholderText = "macro name",
+		PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0.5,
+		BackgroundColor3 = "Element",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		ClearTextOnFocus = false,
+		Position = UDim2.fromOffset(0, 18),
+		Size = UDim2.new(1, -18, 0, 15),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 6,
+	})
+	New("UIPadding", { Parent = NameBox, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 4) })
+
+	local SavedRow = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 36),
+		Size = UDim2.new(1, 0, 0, 15),
+		ZIndex = 6,
+	})
+	New("UIListLayout", {
+		Parent = SavedRow,
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 3),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local SavedOuter = New("Frame", {
+		Parent = SavedRow,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		Size = UDim2.new(0, 0, 0, 15),
+		ZIndex = 6,
+	})
+	New("UIFlexItem", { Parent = SavedOuter, FlexMode = Enum.UIFlexMode.Fill })
+	local SavedBtn = New("TextButton", {
+		Parent = SavedOuter,
+		Text = "saved macros",
+		TextColor3 = "DimColor",
+		TextStrokeTransparency = 0.5,
+		BackgroundColor3 = "Element",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		AutoButtonColor = false,
+		Position = UDim2.fromOffset(2, 2),
+		Size = UDim2.new(1, -4, 1, -4),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 7,
+	})
+	New("UIPadding", { Parent = SavedBtn, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 12) })
+	New("TextLabel", {
+		Parent = SavedBtn,
+		Text = "+",
+		TextColor3 = "DimColor",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 2, 0.5, 0),
+		Size = UDim2.fromOffset(8, 12),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 7,
+	})
+	local function savedActionBtn(text, width)
+		return New("TextButton", {
+			Parent = SavedRow,
+			Text = text,
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			AutoButtonColor = false,
+			Size = UDim2.new(0, width, 0, 15),
+			ZIndex = 7,
+		})
+	end
+	local LoadBtn = savedActionBtn("Load", 40)
+	local DeleteBtn = savedActionBtn("Delete", 50)
+
 	local Toolbar = New("Frame", {
 		Parent = shell.Body,
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 18),
+		Position = UDim2.fromOffset(0, 54),
 		Size = UDim2.new(1, 0, 0, 16),
 		ZIndex = 6,
 	})
@@ -3474,10 +3561,9 @@ function Library:CreateMacroCreator(info)
 	end
 	local AddBtn = toolButton("+ Add", 50)
 	local SaveBtn = toolButton("Save", 44)
-	local LoadBtn = toolButton("Load", 44)
 	local ClearBtn = toolButton("Clear", 44)
 
-	local _, _, listBody = MakePanel(shell.Body, UDim2.new(1, 0, 1, -38), UDim2.fromOffset(0, 38))
+	local _, _, listBody = MakePanel(shell.Body, UDim2.new(1, 0, 1, -72), UDim2.fromOffset(0, 72))
 	local Scroll = New("ScrollingFrame", {
 		Parent = listBody,
 		BackgroundTransparency = 1,
@@ -3504,7 +3590,7 @@ function Library:CreateMacroCreator(info)
 		BackgroundColor3 = "Dark",
 		BorderColor3 = "DarkBorder",
 		BorderSizePixel = 1,
-		Position = UDim2.fromOffset(5, 55),
+		Position = UDim2.fromOffset(5, 91),
 		Size = UDim2.fromOffset(112, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Visible = false,
@@ -3541,15 +3627,85 @@ function Library:CreateMacroCreator(info)
 		Holder = shell.Outline,
 		Scroll = Scroll,
 		Header = Header,
+		NameBox = NameBox,
 		ResizeHandle = ResizeHandle,
 		Steps = {},
 		StepTypes = {},
 		_order = {},
 		OnSave = onSave,
 		OnLoad = onLoad,
+		OnDelete = onDelete,
 	}
 
-	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(230, 170), Vector2.new(560, 560))
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(230, 210), Vector2.new(560, 560))
+
+	local savedNames, selectedName = {}, nil
+	local SavedMenu = Library:AddContextMenu(SavedOuter, function()
+		return UDim2.fromOffset(SavedOuter.AbsoluteSize.X, 0)
+	end, function()
+		return { 0, SavedOuter.AbsoluteSize.Y + 1 }
+	end, 1)
+	local SListOuter = New("Frame", {
+		Parent = SavedMenu.Menu,
+		BackgroundColor3 = "Dark",
+		BorderColor3 = "DarkBorder",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ZIndex = 50,
+	})
+	New("UIPadding", { Parent = SListOuter, PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 2), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
+	local SListInner = New("Frame", {
+		Parent = SListOuter,
+		BackgroundColor3 = "Element",
+		BorderColor3 = "ElementBorder",
+		BorderSizePixel = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ZIndex = 50,
+	})
+	local SItemList = New("Frame", {
+		Parent = SListInner,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		ZIndex = 50,
+	})
+	New("UIListLayout", { Parent = SItemList, Padding = UDim.new(0, 2) })
+	New("UIPadding", { Parent = SItemList, PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 2) })
+	local function buildSavedMenu()
+		for _, c in SItemList:GetChildren() do
+			if c:IsA("TextButton") then
+				c:Destroy()
+			end
+		end
+		for _, name in ipairs(savedNames) do
+			local item = New("TextButton", {
+				Parent = SItemList,
+				Text = name,
+				TextColor3 = "DimColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Pop",
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 14),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 51,
+			})
+			New("UIPadding", { Parent = item, PaddingLeft = UDim.new(0, 5) })
+			item.MouseButton1Click:Connect(function()
+				selectedName = name
+				SavedBtn.Text = name
+				SavedMenu:Close()
+			end)
+		end
+		SavedMenu:SetSize(UDim2.fromOffset(SavedOuter.AbsoluteSize.X, math.min(#savedNames, 8) * 16 + 8))
+	end
+	SavedBtn.MouseButton1Click:Connect(function()
+		if #savedNames == 0 then
+			return
+		end
+		buildSavedMenu()
+		SavedMenu:Toggle()
+	end)
 
 	local KEY_NONE = "None"
 	local activeCapture
@@ -3878,17 +4034,39 @@ function Library:CreateMacroCreator(info)
 		end
 	end
 
+	function Macro:GetName()
+		return NameBox.Text
+	end
+	function Macro:SetName(name)
+		NameBox.Text = tostring(name or "")
+	end
+	function Macro:SetSavedList(names)
+		savedNames = names or {}
+		if #savedNames == 0 then
+			SavedBtn.Text = "saved macros"
+			selectedName = nil
+		end
+		buildSavedMenu()
+	end
+
 	function Macro:Save()
 		if self.OnSave then
 			Library:SafeCallback(self.OnSave, self:GetSequence())
 		end
 	end
-	function Macro:Load()
+	function Macro:Load(name)
+		name = name or selectedName or NameBox.Text
 		if self.OnLoad then
-			local seq = self.OnLoad()
+			local seq = self.OnLoad(name)
 			if type(seq) == "table" then
 				self:SetSequence(seq)
 			end
+		end
+	end
+	function Macro:Delete(name)
+		name = name or selectedName or NameBox.Text
+		if name ~= "" and self.OnDelete then
+			Library:SafeCallback(self.OnDelete, name)
 		end
 	end
 
@@ -3923,6 +4101,9 @@ function Library:CreateMacroCreator(info)
 	LoadBtn.MouseButton1Click:Connect(function()
 		Macro:Load()
 	end)
+	DeleteBtn.MouseButton1Click:Connect(function()
+		Macro:Delete()
+	end)
 	ClearBtn.MouseButton1Click:Connect(function()
 		Macro:Clear()
 	end)
@@ -3937,6 +4118,9 @@ function Library:CreateMacroCreator(info)
 	end
 	if not Macro.OnLoad then
 		LoadBtn.Visible = false
+	end
+	if not Macro.OnDelete then
+		DeleteBtn.Visible = false
 	end
 
 	Library.MacroCreator = Macro
