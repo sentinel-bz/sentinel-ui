@@ -317,8 +317,7 @@ local function SetSchemeText(label, key, fallbackKey)
 	reg.TextColor3 = key
 end
 
--- greys via transparency only (never color props) so it can't fight UpdateColorsUsingRegistry
--- or SetTextColorKey; fully reversible. fades = { {inst, prop, onValue, offValue}, ... }
+-- greys via transparency only (never color props) so it can't fight the theme registry; fully reversible
 local function MakeDisableable(handle, fades, setInteractive)
 	handle.Disabled = handle.Disabled == true
 	function handle:SetDisabled(state)
@@ -511,9 +510,7 @@ Library:GiveSignal(ScreenGui.DescendantRemoving:Connect(function(instance)
 	end
 end))
 
--- Drawing-based cursor: renders in true screen space (no GuiInset / ScreenGui), and the tip is an
--- explicit point (PointA) so it lands exactly on the OS cursor used for hover/click. Guarded for
--- executors without Drawing (falls back to the system cursor).
+-- Drawing-based cursor in true screen space; the tip (PointA) lands exactly on the OS cursor
 local Cursor, CursorOutline
 do
 	if Drawing then
@@ -593,8 +590,7 @@ function Library:MakeDraggable(ui, dragFrame, isMainWindow)
 	end))
 end
 
--- drag a corner handle to resize `ui` (offset size), clamped to min/max. returns a clamped
--- setSize(w, h) so a consumer (or the harness) can drive a resize without real input.
+-- drag a corner handle to resize `ui`, clamped to min/max; returns a clamped setSize(w, h)
 function Library:MakeResizable(ui, handle, minSize, maxSize)
 	minSize = minSize or Vector2.new(120, 80)
 	maxSize = maxSize or Vector2.new(800, 600)
@@ -1352,8 +1348,7 @@ function Funcs:AddToggle(idx, info)
 	Box.MouseButton1Click:Connect(flip)
 
 	MakeRecolorable(Toggle, Label, "DimColor")
-	-- no setInteractive: the flip guard already blocks clicks, and keeping it Interactable
-	-- lets the tooltip's MouseEnter still fire while greyed out
+	-- no setInteractive: the flip guard blocks clicks, but staying Interactable keeps the tooltip working
 	MakeDisableable(Toggle, {
 		{ Label, "TextTransparency", DISABLED_TEXT_FADE, 0 },
 		{ Fill, "BackgroundTransparency", DISABLED_FILL_FADE, 0 },
@@ -2730,9 +2725,7 @@ function Library:ResetSearch()
 	Library.Searching = false
 end
 
--- bring a matched element into view by scrolling its column (Left/RightSide ScrollingFrame).
--- deferred so a just-revealed tab/section has settled its layout before we read AbsolutePosition;
--- the mock runs task.defer synchronously, so the scroll logic stays verifiable in the harness.
+-- scroll a matched element's column to it; deferred so a just-revealed tab has settled its layout first
 local SEARCH_SCROLL_PAD = 8
 local function scrollEntryIntoView(entry)
 	if not entry then
@@ -3242,8 +3235,7 @@ function Library:CreatePlayerList()
 	return PlayerList
 end
 
--- standalone floating, draggable + corner-resizable chat/log window (not a groupbox component).
--- lines are plain New() TextLabels (no hardcoded font) so SetFont/SetFontSize keep reaching them.
+-- standalone draggable + corner-resizable chat/log window (not a groupbox component)
 function Library:CreateChatLog(info)
 	info = Library:Validate(info or {}, {
 		Title = "chat",
@@ -3417,10 +3409,7 @@ function Library:CreateChatLog(info)
 	return ChatLog
 end
 
--- standalone macro-creator window: an editable step sequence. domain-neutral — the library knows
--- nothing about what a step *does*; it builds the editor, ships generic step types (wait/key/click/
--- comment), and lets the consumer RegisterStepType + drive execution off GetSequence(). file I/O is
--- the consumer's job via OnSave/OnLoad. rows use plain New() (no hardcoded font) so SetFont reaches them.
+-- standalone, domain-neutral macro-creator window: an editable step sequence the consumer drives off GetSequence()
 function Library:CreateMacroCreator(info)
 	info = info or {}
 	local onSave, onLoad = info.OnSave, info.OnLoad
@@ -3954,11 +3943,7 @@ function Library:CreateMacroCreator(info)
 	return Macro
 end
 
--- standalone waypoint-path editor window: an editable, reorderable list of points so a recorded path
--- can be fixed in place (reorder / delete / insert / retype / reposition) instead of hand-editing the
--- file or re-recording. domain-neutral — a point is a position (x,y,z) + a consumer-named kind (each
--- kind carries optional inline fields). every edit routes back through callbacks; the consumer owns
--- the point data, the 3D view, and file I/O. rows use plain New() so SetFont reaches them.
+-- standalone, domain-neutral waypoint-path editor: a point is a position + consumer-named kind, every edit routes through callbacks
 function Library:CreatePathEditor(info)
 	info = info or {}
 	local cb = {
@@ -3975,8 +3960,7 @@ function Library:CreatePathEditor(info)
 		OnClose = info.OnClose,
 	}
 	local kinds = info.Kinds or {}
-	-- optional per-point condition system: consumer supplies the variables + operators, the editor
-	-- renders an "if <var> <op> <value><unit>" sub-line and routes edits through OnCondition
+	-- optional per-point condition: consumer supplies Vars/Ops, the editor renders an "if" sub-line
 	local condCfg = info.Condition
 	local condVars = (condCfg and condCfg.Vars) or {}
 	local condOps = (condCfg and condCfg.Ops) or { ">=", "<=" }
@@ -4148,8 +4132,7 @@ function Library:CreatePathEditor(info)
 		return box
 	end
 
-	-- "if <var> <op> <value><unit>" sub-line under a point that carries a condition; cycle buttons mutate
-	-- point.condition in place and route through OnCondition (no rebuild, so the editing control survives)
+	-- the "if <var> <op> <value>" sub-line; cycle buttons mutate point.condition in place via OnCondition
 	local function makeConditionLine(row, point, index)
 		local cond = point.condition
 		local line = New("Frame", {
@@ -4242,8 +4225,7 @@ function Library:CreatePathEditor(info)
 			kindCfg = (kindOrder[1] and kindByKey[kindOrder[1]]) or { label = tostring(kindKey), color = "FontColor", fields = {} }
 		end
 
-		-- row hosts a fixed 18px "Main" line and (optionally) a 16px "Condition" line; AutomaticSize.Y so
-		-- the Element background wraps whichever lines are present
+		-- a fixed 18px "Main" line + an optional 16px "Condition" line; AutomaticSize.Y wraps both
 		local row = New("Frame", {
 			Parent = Scroll,
 			Name = "Point",
@@ -4269,8 +4251,7 @@ function Library:CreatePathEditor(info)
 			Size = UDim2.new(1, 0, 0, 18),
 			LayoutOrder = 1,
 		})
-		-- fixed-offset columns (index | type | coords | fields | buttons) so coords and the edit fields
-		-- line up vertically across every row regardless of how wide each coord string is
+		-- fixed-offset columns (index | type | coords | fields | buttons) so the edit fields line up
 		New("TextLabel", {
 			Parent = main,
 			Name = "Index",
@@ -4429,15 +4410,13 @@ function Library:CreatePathEditor(info)
 		end
 	end
 
-	-- field commits don't restructure the row (coords/type unchanged), so no rebuild — the consumer's
-	-- callback updates its own 3D view; everything else rebuilds so indices/coords/labels stay correct
+	-- field commits don't restructure the row, so no rebuild (the consumer updates its own view)
 	function PathEditor:SetField(index, key, value)
 		if cb.OnField then
 			Library:SafeCallback(cb.OnField, index, key, value)
 		end
 	end
-	-- cond is { var, op, value } or nil to clear; in-place field edits skip the rebuild, the ? toggle
-	-- (add / clear) drives its own Refresh so the sub-line appears / disappears
+	-- cond is { var, op, value } or nil to clear; the ? toggle drives its own Refresh, field edits don't
 	function PathEditor:SetCondition(index, cond)
 		if cb.OnCondition then
 			Library:SafeCallback(cb.OnCondition, index, cond)
@@ -4527,9 +4506,7 @@ function Library:CreatePathEditor(info)
 	return PathEditor
 end
 
--- standalone auto-sizing draggable status panel (like the KeybindList box). domain-neutral:
--- the consumer feeds it text rows. rows are plain New() TextLabels (no hardcoded font) so
--- SetFont/SetFontSize reach them; the box auto-sizes to its widest row + row count via AutomaticSize.
+-- standalone auto-sizing draggable status panel; the consumer feeds it text rows
 function Library:CreateStatusList(info)
 	info = Library:Validate(info or {}, {
 		Title = "status",
@@ -4584,8 +4561,7 @@ function Library:CreateStatusList(info)
 	})
 	New("UIListLayout", { Parent = Body, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
 
-	-- width is set explicitly in _relayout (= widest of title/rows) so the title and the row surface
-	-- share one width and the accent border stays even; left-aligned text fills the rest
+	-- width is set in _relayout (= widest of title/rows) so the title and rows share one width (even border)
 	local Title = New("TextLabel", {
 		Parent = Body,
 		Name = "Title",
@@ -4657,10 +4633,7 @@ function Library:CreateStatusList(info)
 		return (ok and w) or 0
 	end
 
-	-- Title and rows share ONE width: innerW = widest of {title, rows} measured at base size then scaled,
-	-- and both Title and Content are set to innerW so neither leaves slack on the right (even accent
-	-- border, any row count). height + width derive from the continuous float scale (not the integer text
-	-- size), so a corner drag resizes the box smoothly. AutomaticSize is off on Body/Title/Content/rows.
+	-- Title + Content both get innerW (widest of title/rows, base-measured then scaled) for an even border
 	function StatusList:_relayout()
 		local scale = self.Scale
 		Title.TextSize = BASE_TITLE_TEXT
@@ -4699,8 +4672,7 @@ function Library:CreateStatusList(info)
 		return self.Scale
 	end
 
-	-- continuous corner resize like the ChatLog: scale tracks the cursor proportionally to the live box
-	-- span every frame, so dragging feels smooth instead of stepping in fixed increments
+	-- continuous corner resize: scale tracks the cursor proportionally to the live box span
 	do
 		local startPos, startScale, startSpan
 		local resizing = false
