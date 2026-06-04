@@ -3971,9 +3971,17 @@ function Library:CreatePathEditor(info)
 		OnInsert = info.OnInsert,
 		OnAppend = info.OnAppend,
 		OnSave = info.OnSave,
+		OnCondition = info.OnCondition,
 		OnClose = info.OnClose,
 	}
 	local kinds = info.Kinds or {}
+	-- optional per-point condition system: consumer supplies the variables + operators, the editor
+	-- renders an "if <var> <op> <value><unit>" sub-line and routes edits through OnCondition
+	local condCfg = info.Condition
+	local condVars = (condCfg and condCfg.Vars) or {}
+	local condOps = (condCfg and condCfg.Ops) or { ">=", "<=" }
+	local condUnit = (condCfg and condCfg.Unit) or ""
+	local condDefault = (condCfg and condCfg.Default) or 0
 	info = Library:Validate(info, {
 		Title = "path editor",
 		Width = 400,
@@ -4140,6 +4148,93 @@ function Library:CreatePathEditor(info)
 		return box
 	end
 
+	-- "if <var> <op> <value><unit>" sub-line under a point that carries a condition; cycle buttons mutate
+	-- point.condition in place and route through OnCondition (no rebuild, so the editing control survives)
+	local function makeConditionLine(row, point, index)
+		local cond = point.condition
+		local line = New("Frame", {
+			Parent = row,
+			Name = "Condition",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 16),
+			LayoutOrder = 2,
+		})
+		New("UIListLayout", {
+			Parent = line,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		New("UIPadding", { Parent = line, PaddingLeft = UDim.new(0, 26) })
+		New("TextLabel", {
+			Parent = line,
+			Text = "if",
+			TextColor3 = "Accent",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, 14),
+			ZIndex = 12,
+		})
+		local function cycleBtn(options, key, width)
+			local btn = New("TextButton", {
+				Parent = line,
+				Text = tostring(cond[key]),
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundColor3 = "Element",
+				BorderColor3 = "ElementBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.fromOffset(width, 14),
+				ZIndex = 12,
+			})
+			btn.MouseButton1Click:Connect(function()
+				if #options == 0 then
+					return
+				end
+				local at = table.find(options, cond[key]) or 0
+				cond[key] = options[(at % #options) + 1]
+				btn.Text = tostring(cond[key])
+				PathEditor:SetCondition(index, cond)
+			end)
+			return btn
+		end
+		cycleBtn(condVars, "var", 92)
+		cycleBtn(condOps, "op", 32)
+		local valBox = New("TextBox", {
+			Parent = line,
+			Text = tostring(cond.value or 0),
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			ClearTextOnFocus = false,
+			Size = UDim2.fromOffset(34, 14),
+			ZIndex = 12,
+		})
+		valBox.FocusLost:Connect(function()
+			local n = tonumber(valBox.Text) or cond.value or 0
+			cond.value = n
+			valBox.Text = tostring(n)
+			PathEditor:SetCondition(index, cond)
+		end)
+		if condUnit ~= "" then
+			New("TextLabel", {
+				Parent = line,
+				Text = condUnit,
+				TextColor3 = "DimColor",
+				TextStrokeTransparency = 0.5,
+				BackgroundTransparency = 1,
+				AutomaticSize = Enum.AutomaticSize.X,
+				Size = UDim2.fromOffset(0, 14),
+				ZIndex = 12,
+			})
+		end
+		return line
+	end
+
 	local function makeRow(point, index)
 		local kindKey = point.kind
 		local kindCfg = kindByKey[kindKey]
@@ -4147,19 +4242,37 @@ function Library:CreatePathEditor(info)
 			kindCfg = (kindOrder[1] and kindByKey[kindOrder[1]]) or { label = tostring(kindKey), color = "FontColor", fields = {} }
 		end
 
+		-- row hosts a fixed 18px "Main" line and (optionally) a 16px "Condition" line; AutomaticSize.Y so
+		-- the Element background wraps whichever lines are present
 		local row = New("Frame", {
 			Parent = Scroll,
 			Name = "Point",
 			BackgroundColor3 = "Element",
 			BorderColor3 = "ElementBorder",
 			BorderSizePixel = 1,
-			Size = UDim2.new(1, 0, 0, 18),
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			LayoutOrder = index,
+		})
+		New("UIListLayout", { Parent = row, SortOrder = Enum.SortOrder.LayoutOrder })
+		row.MouseEnter:Connect(function()
+			row.BackgroundColor3 = Library.Scheme.Pop
+		end)
+		row.MouseLeave:Connect(function()
+			row.BackgroundColor3 = Library.Scheme.Element
+		end)
+
+		local main = New("Frame", {
+			Parent = row,
+			Name = "Main",
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 18),
+			LayoutOrder = 1,
 		})
 		-- fixed-offset columns (index | type | coords | fields | buttons) so coords and the edit fields
 		-- line up vertically across every row regardless of how wide each coord string is
 		New("TextLabel", {
-			Parent = row,
+			Parent = main,
 			Name = "Index",
 			Text = index .. ".",
 			TextColor3 = "DimColor",
@@ -4171,7 +4284,7 @@ function Library:CreatePathEditor(info)
 			ZIndex = 11,
 		})
 		local TypeBtn = New("TextButton", {
-			Parent = row,
+			Parent = main,
 			Name = "Type",
 			Text = kindCfg.label or kindKey,
 			TextColor3 = kindCfg.color or "FontColor",
@@ -4187,7 +4300,7 @@ function Library:CreatePathEditor(info)
 			PathEditor:SetKind(index, nextKind(kindKey))
 		end)
 		New("TextLabel", {
-			Parent = row,
+			Parent = main,
 			Name = "Coords",
 			Text = string.format("(%d, %d, %d)", Round(point.x or 0), Round(point.y or 0), Round(point.z or 0)),
 			TextColor3 = "DimColor",
@@ -4200,11 +4313,11 @@ function Library:CreatePathEditor(info)
 			ZIndex = 11,
 		})
 		local fieldHolder = New("Frame", {
-			Parent = row,
+			Parent = main,
 			Name = "Fields",
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(182, 0),
-			Size = UDim2.new(1, -274, 1, 0),
+			Size = UDim2.new(1, -292, 1, 0),
 			ZIndex = 11,
 		})
 		New("UIListLayout", {
@@ -4224,19 +4337,12 @@ function Library:CreatePathEditor(info)
 			}, index)
 		end
 
-		row.MouseEnter:Connect(function()
-			row.BackgroundColor3 = Library.Scheme.Pop
-		end)
-		row.MouseLeave:Connect(function()
-			row.BackgroundColor3 = Library.Scheme.Element
-		end)
-
 		local right = New("Frame", {
-			Parent = row,
+			Parent = main,
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -2, 0.5, 0),
-			Size = UDim2.fromOffset(86, 16),
+			Size = UDim2.fromOffset(104, 16),
 			ZIndex = 11,
 		})
 		New("UIListLayout", {
@@ -4277,6 +4383,24 @@ function Library:CreatePathEditor(info)
 		actBtn("X", 5).MouseButton1Click:Connect(function()
 			PathEditor:Delete(index)
 		end)
+		if condCfg then
+			local condBtn = actBtn("?", 6)
+			if point.condition then
+				condBtn.TextColor3 = Library.Scheme.Accent
+			end
+			condBtn.MouseButton1Click:Connect(function()
+				if point.condition then
+					PathEditor:SetCondition(index, nil)
+				else
+					PathEditor:SetCondition(index, { var = condVars[1], op = condOps[1], value = condDefault })
+				end
+				PathEditor:Refresh()
+			end)
+		end
+
+		if condCfg and point.condition then
+			makeConditionLine(row, point, index)
+		end
 
 		table.insert(PathEditor.Rows, row)
 		return row
@@ -4310,6 +4434,13 @@ function Library:CreatePathEditor(info)
 	function PathEditor:SetField(index, key, value)
 		if cb.OnField then
 			Library:SafeCallback(cb.OnField, index, key, value)
+		end
+	end
+	-- cond is { var, op, value } or nil to clear; in-place field edits skip the rebuild, the ? toggle
+	-- (add / clear) drives its own Refresh so the sub-line appears / disappears
+	function PathEditor:SetCondition(index, cond)
+		if cb.OnCondition then
+			Library:SafeCallback(cb.OnCondition, index, cond)
 		end
 	end
 	function PathEditor:SetKind(index, key)
