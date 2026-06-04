@@ -3954,6 +3954,432 @@ function Library:CreateMacroCreator(info)
 	return Macro
 end
 
+-- standalone waypoint-path editor window: an editable, reorderable list of points so a recorded path
+-- can be fixed in place (reorder / delete / insert / retype / reposition) instead of hand-editing the
+-- file or re-recording. domain-neutral — a point is a position (x,y,z) + a consumer-named kind (each
+-- kind carries optional inline fields). every edit routes back through callbacks; the consumer owns
+-- the point data, the 3D view, and file I/O. rows use plain New() so SetFont reaches them.
+function Library:CreatePathEditor(info)
+	info = info or {}
+	local cb = {
+		Read = info.Read,
+		OnField = info.OnField,
+		OnKind = info.OnKind,
+		OnMove = info.OnMove,
+		OnDelete = info.OnDelete,
+		OnRecapture = info.OnRecapture,
+		OnInsert = info.OnInsert,
+		OnAppend = info.OnAppend,
+		OnSave = info.OnSave,
+		OnClose = info.OnClose,
+	}
+	local kinds = info.Kinds or {}
+	info = Library:Validate(info, {
+		Title = "path editor",
+		Width = 400,
+		Height = 344,
+		Visible = false,
+	})
+
+	local kindByKey, kindOrder = {}, {}
+	for _, k in ipairs(kinds) do
+		kindByKey[k.key] = k
+		table.insert(kindOrder, k.key)
+	end
+	local function nextKind(key)
+		if #kindOrder == 0 then
+			return key
+		end
+		local i = table.find(kindOrder, key) or 0
+		return kindOrder[(i % #kindOrder) + 1]
+	end
+
+	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(360, 130), info.Title)
+	shell.Outline.Visible = info.Visible and true or false
+
+	local Header = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 5,
+	})
+	Library:MakeDraggable(shell.Outline, Header)
+
+	local CloseBtn = New("TextButton", {
+		Parent = shell.Body,
+		Text = "X",
+		TextColor3 = "FontColor",
+		TextStrokeTransparency = 0.5,
+		TextSize = 16,
+		BackgroundTransparency = 1,
+		AutoButtonColor = false,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromOffset(16, 16),
+		ZIndex = 8,
+	})
+
+	local Toolbar = New("Frame", {
+		Parent = shell.Body,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 18),
+		Size = UDim2.new(1, 0, 0, 16),
+		ZIndex = 6,
+	})
+	New("UIListLayout", {
+		Parent = Toolbar,
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 3),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	})
+	local function toolButton(text, width)
+		return New("TextButton", {
+			Parent = Toolbar,
+			Text = text,
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			AutoButtonColor = false,
+			Size = UDim2.new(0, width, 0, 15),
+			ZIndex = 7,
+		})
+	end
+	local AddBtn = toolButton("+ Add @ Me", 74)
+	local RefreshBtn = toolButton("Refresh", 54)
+	local SaveBtn = toolButton("Save", 44)
+
+	-- one static legend so the terse row glyphs are self-explanatory (no per-row tooltips to leak)
+	New("TextLabel", {
+		Parent = shell.Body,
+		Text = "+ insert at you   @ move here   \xE2\x96\xB2\xE2\x96\xBC reorder   X delete   (click type to change)",
+		TextColor3 = "DimColor",
+		TextStrokeTransparency = 0.5,
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(2, 36),
+		Size = UDim2.new(1, -4, 0, 12),
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		ZIndex = 6,
+	})
+
+	local _, _, listBody = MakePanel(shell.Body, UDim2.new(1, 0, 1, -52), UDim2.fromOffset(0, 52))
+	local Scroll = New("ScrollingFrame", {
+		Parent = listBody,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = "Accent",
+	})
+	New("UIListLayout", { Parent = Scroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+	New("UIPadding", {
+		Parent = Scroll,
+		PaddingTop = UDim.new(0, 2),
+		PaddingBottom = UDim.new(0, 2),
+		PaddingLeft = UDim.new(0, 2),
+		PaddingRight = UDim.new(0, 3),
+	})
+
+	local ResizeHandle = New("Frame", {
+		Parent = shell.Outline,
+		BackgroundColor3 = "Accent",
+		BorderColor3 = "Border",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -1, 1, -1),
+		Size = UDim2.fromOffset(10, 10),
+		ZIndex = 50,
+		Active = true,
+	})
+
+	local PathEditor = {
+		Holder = shell.Outline,
+		Scroll = Scroll,
+		Header = Header,
+		ResizeHandle = ResizeHandle,
+		Rows = {},
+	}
+
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(300, 180), Vector2.new(620, 620))
+
+	-- inline field editor (number/text); commits straight back through OnField on FocusLost
+	local function makeEditor(parent, field, index)
+		local box = New("TextBox", {
+			Parent = parent,
+			Text = tostring(field.Value ~= nil and field.Value or (field.Default ~= nil and field.Default or "")),
+			PlaceholderText = field.Placeholder or "",
+			PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+			TextColor3 = "FontColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			ClearTextOnFocus = false,
+			Size = UDim2.new(0, field.Width or 44, 0, 14),
+			ZIndex = 12,
+		})
+		box.FocusLost:Connect(function()
+			local value = box.Text
+			if field.Kind == "number" then
+				local n = tonumber(box.Text)
+				if n == nil then
+					n = field.Default or 0
+				end
+				value = n
+				box.Text = tostring(n)
+			end
+			PathEditor:SetField(index, field.Key, value)
+		end)
+		return box
+	end
+
+	local function makeRow(point, index)
+		local kindKey = point.kind
+		local kindCfg = kindByKey[kindKey]
+		if not kindCfg then
+			kindCfg = (kindOrder[1] and kindByKey[kindOrder[1]]) or { label = tostring(kindKey), color = "FontColor", fields = {} }
+		end
+
+		local row = New("Frame", {
+			Parent = Scroll,
+			Name = "Point",
+			BackgroundColor3 = "Element",
+			BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1,
+			Size = UDim2.new(1, 0, 0, 18),
+			LayoutOrder = index,
+		})
+		New("TextLabel", {
+			Parent = row,
+			Name = "Index",
+			Text = index .. ".",
+			TextColor3 = "DimColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(3, 0),
+			Size = UDim2.fromOffset(18, 18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 11,
+		})
+		local left = New("Frame", {
+			Parent = row,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(22, 0),
+			Size = UDim2.new(1, -110, 1, 0),
+			ZIndex = 11,
+		})
+		New("UIListLayout", {
+			Parent = left,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local TypeBtn = New("TextButton", {
+			Parent = left,
+			Name = "Type",
+			Text = kindCfg.label or kindKey,
+			TextColor3 = kindCfg.color or "FontColor",
+			TextStrokeTransparency = 0,
+			BackgroundTransparency = 1,
+			AutoButtonColor = false,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(40, 18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 11,
+		})
+		TypeBtn.MouseButton1Click:Connect(function()
+			PathEditor:SetKind(index, nextKind(kindKey))
+		end)
+		New("TextLabel", {
+			Parent = left,
+			Name = "Coords",
+			Text = string.format("(%d, %d, %d)", Round(point.x or 0), Round(point.y or 0), Round(point.z or 0)),
+			TextColor3 = "DimColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(0, 18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 11,
+		})
+		for _, field in ipairs(kindCfg.fields or {}) do
+			makeEditor(left, {
+				Key = field.Key,
+				Kind = field.Kind,
+				Default = field.Default,
+				Width = field.Width,
+				Placeholder = field.Placeholder,
+				Value = point[field.Key],
+			}, index)
+		end
+
+		local right = New("Frame", {
+			Parent = row,
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -2, 0.5, 0),
+			Size = UDim2.fromOffset(86, 16),
+			ZIndex = 11,
+		})
+		New("UIListLayout", {
+			Parent = right,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 2),
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
+		local function actBtn(text, order)
+			return New("TextButton", {
+				Parent = right,
+				Text = text,
+				TextColor3 = "FontColor",
+				TextStrokeTransparency = 0.5,
+				TextSize = 12,
+				BackgroundColor3 = "Dark",
+				BorderColor3 = "DarkBorder",
+				BorderSizePixel = 1,
+				AutoButtonColor = false,
+				Size = UDim2.fromOffset(15, 14),
+				LayoutOrder = order,
+				ZIndex = 12,
+			})
+		end
+		actBtn("+", 1).MouseButton1Click:Connect(function()
+			PathEditor:Insert(index)
+		end)
+		actBtn("@", 2).MouseButton1Click:Connect(function()
+			PathEditor:Recapture(index)
+		end)
+		actBtn("\xE2\x96\xB2", 3).MouseButton1Click:Connect(function()
+			PathEditor:Move(index, -1)
+		end)
+		actBtn("\xE2\x96\xBC", 4).MouseButton1Click:Connect(function()
+			PathEditor:Move(index, 1)
+		end)
+		actBtn("X", 5).MouseButton1Click:Connect(function()
+			PathEditor:Delete(index)
+		end)
+
+		table.insert(PathEditor.Rows, row)
+		return row
+	end
+
+	function PathEditor:Refresh()
+		for _, r in self.Rows do
+			pcall(function()
+				r:Destroy()
+			end)
+		end
+		table.clear(self.Rows)
+		local points = {}
+		if cb.Read then
+			local ok, res = pcall(cb.Read)
+			if ok and type(res) == "table" then
+				points = res
+			end
+		end
+		for i, p in ipairs(points) do
+			makeRow(p, i)
+		end
+	end
+
+	-- field commits don't restructure the row (coords/type unchanged), so no rebuild — the consumer's
+	-- callback updates its own 3D view; everything else rebuilds so indices/coords/labels stay correct
+	function PathEditor:SetField(index, key, value)
+		if cb.OnField then
+			Library:SafeCallback(cb.OnField, index, key, value)
+		end
+	end
+	function PathEditor:SetKind(index, key)
+		if cb.OnKind then
+			Library:SafeCallback(cb.OnKind, index, key)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Move(index, delta)
+		if cb.OnMove then
+			Library:SafeCallback(cb.OnMove, index, delta)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Delete(index)
+		if cb.OnDelete then
+			Library:SafeCallback(cb.OnDelete, index)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Recapture(index)
+		if cb.OnRecapture then
+			Library:SafeCallback(cb.OnRecapture, index)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Insert(index)
+		if cb.OnInsert then
+			Library:SafeCallback(cb.OnInsert, index)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Append()
+		if cb.OnAppend then
+			Library:SafeCallback(cb.OnAppend)
+		end
+		self:Refresh()
+	end
+	function PathEditor:Save()
+		if not cb.OnSave then
+			return
+		end
+		local ok, res = pcall(cb.OnSave)
+		return ok and res
+	end
+
+	function PathEditor:SetVisible(v)
+		shell.Outline.Visible = v and true or false
+	end
+	function PathEditor:Show()
+		self:SetVisible(true)
+	end
+	function PathEditor:Hide()
+		self:SetVisible(false)
+	end
+	function PathEditor:Toggle()
+		self:SetVisible(not shell.Outline.Visible)
+	end
+	function PathEditor:Resize(dx, dy)
+		return setSize(shell.Outline.Size.X.Offset + (dx or 0), shell.Outline.Size.Y.Offset + (dy or 0))
+	end
+
+	CloseBtn.MouseButton1Click:Connect(function()
+		PathEditor:Hide()
+		if cb.OnClose then
+			Library:SafeCallback(cb.OnClose)
+		end
+	end)
+	AddBtn.MouseButton1Click:Connect(function()
+		PathEditor:Append()
+	end)
+	RefreshBtn.MouseButton1Click:Connect(function()
+		PathEditor:Refresh()
+	end)
+	SaveBtn.MouseButton1Click:Connect(function()
+		PathEditor:Save()
+	end)
+	if not cb.OnSave then
+		SaveBtn.Visible = false
+	end
+
+	PathEditor:Refresh()
+	Library.PathEditor = PathEditor
+	return PathEditor
+end
+
 -- standalone auto-sizing draggable status panel (like the KeybindList box). domain-neutral:
 -- the consumer feeds it text rows. rows are plain New() TextLabels (no hardcoded font) so
 -- SetFont/SetFontSize reach them; the box auto-sizes to its widest row + row count via AutomaticSize.
