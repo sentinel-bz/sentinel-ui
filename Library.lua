@@ -3993,6 +3993,7 @@ function Library:CreatePathEditor(info)
 		local i = table.find(kindOrder, key) or 0
 		return kindOrder[(i % #kindOrder) + 1]
 	end
+	local BASE_TITLE = info.Title
 
 	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(360, 130), info.Title)
 	shell.Outline.Visible = info.Visible and true or false
@@ -4101,6 +4102,7 @@ function Library:CreatePathEditor(info)
 		Holder = shell.Outline,
 		Scroll = Scroll,
 		Header = Header,
+		Title = shell.Title,
 		ResizeHandle = ResizeHandle,
 		Rows = {},
 	}
@@ -4154,6 +4156,8 @@ function Library:CreatePathEditor(info)
 			Size = UDim2.new(1, 0, 0, 18),
 			LayoutOrder = index,
 		})
+		-- fixed-offset columns (index | type | coords | fields | buttons) so coords and the edit fields
+		-- line up vertically across every row regardless of how wide each coord string is
 		New("TextLabel", {
 			Parent = row,
 			Name = "Index",
@@ -4161,34 +4165,21 @@ function Library:CreatePathEditor(info)
 			TextColor3 = "DimColor",
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(3, 0),
-			Size = UDim2.fromOffset(18, 18),
+			Position = UDim2.fromOffset(4, 0),
+			Size = UDim2.fromOffset(20, 18),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			ZIndex = 11,
 		})
-		local left = New("Frame", {
-			Parent = row,
-			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(22, 0),
-			Size = UDim2.new(1, -110, 1, 0),
-			ZIndex = 11,
-		})
-		New("UIListLayout", {
-			Parent = left,
-			FillDirection = Enum.FillDirection.Horizontal,
-			Padding = UDim.new(0, 4),
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-		})
 		local TypeBtn = New("TextButton", {
-			Parent = left,
+			Parent = row,
 			Name = "Type",
 			Text = kindCfg.label or kindKey,
 			TextColor3 = kindCfg.color or "FontColor",
 			TextStrokeTransparency = 0,
 			BackgroundTransparency = 1,
 			AutoButtonColor = false,
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(40, 18),
+			Position = UDim2.fromOffset(26, 0),
+			Size = UDim2.fromOffset(44, 18),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			ZIndex = 11,
 		})
@@ -4196,20 +4187,34 @@ function Library:CreatePathEditor(info)
 			PathEditor:SetKind(index, nextKind(kindKey))
 		end)
 		New("TextLabel", {
-			Parent = left,
+			Parent = row,
 			Name = "Coords",
 			Text = string.format("(%d, %d, %d)", Round(point.x or 0), Round(point.y or 0), Round(point.z or 0)),
 			TextColor3 = "DimColor",
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, 18),
+			Position = UDim2.fromOffset(72, 0),
+			Size = UDim2.fromOffset(106, 18),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 11,
 		})
+		local fieldHolder = New("Frame", {
+			Parent = row,
+			Name = "Fields",
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(182, 0),
+			Size = UDim2.new(1, -274, 1, 0),
+			ZIndex = 11,
+		})
+		New("UIListLayout", {
+			Parent = fieldHolder,
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 4),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		})
 		for _, field in ipairs(kindCfg.fields or {}) do
-			makeEditor(left, {
+			makeEditor(fieldHolder, {
 				Key = field.Key,
 				Kind = field.Kind,
 				Default = field.Default,
@@ -4218,6 +4223,13 @@ function Library:CreatePathEditor(info)
 				Value = point[field.Key],
 			}, index)
 		end
+
+		row.MouseEnter:Connect(function()
+			row.BackgroundColor3 = Library.Scheme.Pop
+		end)
+		row.MouseLeave:Connect(function()
+			row.BackgroundColor3 = Library.Scheme.Element
+		end)
 
 		local right = New("Frame", {
 			Parent = row,
@@ -4286,6 +4298,10 @@ function Library:CreatePathEditor(info)
 		end
 		for i, p in ipairs(points) do
 			makeRow(p, i)
+		end
+		if shell.Title then
+			local n = #points
+			shell.Title.Text = n > 0 and (BASE_TITLE .. "  (" .. n .. ")") or BASE_TITLE
 		end
 	end
 
