@@ -4152,7 +4152,7 @@ function Library:CreatePathEditor(info)
 	local condDefault = (condCfg and condCfg.Default) or 0
 	info = Library:Validate(info, {
 		Title = "path editor",
-		Width = 400,
+		Width = 480,
 		Height = 344,
 		Visible = false,
 	})
@@ -4283,7 +4283,7 @@ function Library:CreatePathEditor(info)
 		Rows = {},
 	}
 
-	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(300, 180), Vector2.new(620, 620))
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(470, 180), Vector2.new(620, 620))
 
 	-- inline field editor (number/text); commits straight back through OnField on FocusLost
 	local function makeEditor(parent, field, index)
@@ -4472,7 +4472,20 @@ function Library:CreatePathEditor(info)
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
 			Position = UDim2.fromOffset(72, 0),
-			Size = UDim2.fromOffset(106, 18),
+			Size = UDim2.fromOffset(100, 18),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 11,
+		})
+		New("TextLabel", {
+			Parent = main,
+			Name = "Area",
+			Text = (point.area and point.area ~= "") and point.area or "—",
+			TextColor3 = (point.area and point.area ~= "") and "Accent" or "DimColor",
+			TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(176, 0),
+			Size = UDim2.fromOffset(84, 18),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 11,
@@ -4481,8 +4494,8 @@ function Library:CreatePathEditor(info)
 			Parent = main,
 			Name = "Fields",
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(182, 0),
-			Size = UDim2.new(1, -292, 1, 0),
+			Position = UDim2.fromOffset(264, 0),
+			Size = UDim2.new(1, -374, 1, 0),
 			ZIndex = 11,
 		})
 		New("UIListLayout", {
