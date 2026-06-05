@@ -3415,7 +3415,7 @@ end
 -- standalone, domain-neutral macro-creator window: an editable step sequence the consumer drives off GetSequence()
 function Library:CreateMacroCreator(info)
 	info = info or {}
-	local onSave, onLoad, onDelete, onClear = info.OnSave, info.OnLoad, info.OnDelete, info.OnClear
+	local onSave, onLoad, onDelete, onClear, onSelect = info.OnSave, info.OnLoad, info.OnDelete, info.OnClear, info.OnSelect
 	info = Library:Validate(info, {
 		Title = "macro creator",
 		Width = 320,
@@ -3636,6 +3636,7 @@ function Library:CreateMacroCreator(info)
 		OnLoad = onLoad,
 		OnDelete = onDelete,
 		OnClear = onClear,
+		OnSelect = onSelect,
 	}
 
 	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(230, 210), Vector2.new(560, 560))
@@ -3695,7 +3696,11 @@ function Library:CreateMacroCreator(info)
 			item.MouseButton1Click:Connect(function()
 				selectedName = name
 				SavedBtn.Text = name
+				NameBox.Text = name
 				SavedMenu:Close()
+				if Macro.OnSelect then
+					Library:SafeCallback(Macro.OnSelect, name)
+				end
 			end)
 		end
 		SavedMenu:SetSize(UDim2.fromOffset(SavedOuter.AbsoluteSize.X, math.min(#savedNames, 8) * 16 + 8))
