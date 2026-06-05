@@ -3415,7 +3415,7 @@ end
 -- standalone, domain-neutral macro-creator window: an editable step sequence the consumer drives off GetSequence()
 function Library:CreateMacroCreator(info)
 	info = info or {}
-	local onSave, onLoad, onDelete = info.OnSave, info.OnLoad, info.OnDelete
+	local onSave, onLoad, onDelete, onClear = info.OnSave, info.OnLoad, info.OnDelete, info.OnClear
 	info = Library:Validate(info, {
 		Title = "macro creator",
 		Width = 320,
@@ -3635,6 +3635,7 @@ function Library:CreateMacroCreator(info)
 		OnSave = onSave,
 		OnLoad = onLoad,
 		OnDelete = onDelete,
+		OnClear = onClear,
 	}
 
 	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(230, 210), Vector2.new(560, 560))
@@ -4021,6 +4022,12 @@ function Library:CreateMacroCreator(info)
 		end
 		table.clear(self.Steps)
 		renumber()
+		NameBox.Text = ""
+		selectedName = nil
+		SavedBtn.Text = "saved macros"
+		if self.OnClear then
+			Library:SafeCallback(self.OnClear)
+		end
 	end
 
 	function Macro:SetSequence(list)
