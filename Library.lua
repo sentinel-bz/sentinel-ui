@@ -4151,6 +4151,7 @@ function Library:CreatePathEditor(info)
 		OnRecapture = info.OnRecapture,
 		OnInsert = info.OnInsert,
 		OnAppend = info.OnAppend,
+		OnAppendAction = info.OnAppendAction,
 		OnSave = info.OnSave,
 		OnCondition = info.OnCondition,
 		OnRefresh = info.OnRefresh,
@@ -4237,6 +4238,7 @@ function Library:CreatePathEditor(info)
 		})
 	end
 	local AddBtn = toolButton("+ Add @ Me", 74)
+	local ActionBtn = cb.OnAppendAction and toolButton("+ Action", 58) or nil
 	local RefreshBtn = toolButton("Refresh", 54)
 	local SaveBtn = toolButton("Save", 44)
 
@@ -4477,10 +4479,11 @@ function Library:CreatePathEditor(info)
 		TypeBtn.MouseButton1Click:Connect(function()
 			PathEditor:SetKind(index, nextKind(kindKey))
 		end)
+		local positional = kindCfg.Positional ~= false
 		New("TextLabel", {
 			Parent = main,
 			Name = "Coords",
-			Text = string.format("(%d, %d, %d)", Round(point.x or 0), Round(point.y or 0), Round(point.z or 0)),
+			Text = positional and string.format("(%d, %d, %d)", Round(point.x or 0), Round(point.y or 0), Round(point.z or 0)) or "",
 			TextColor3 = "DimColor",
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
@@ -4490,12 +4493,12 @@ function Library:CreatePathEditor(info)
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 11,
 		})
-		local hasArea = point.area and point.area ~= ""
+		local hasArea = positional and point.area and point.area ~= ""
 		New("TextLabel", {
 			Parent = main,
 			Name = "Area",
 			RichText = true,
-			Text = hasArea and ("<b>" .. point.area .. "</b>") or "—",
+			Text = hasArea and ("<b>" .. point.area .. "</b>") or (positional and "—" or ""),
 			TextColor3 = hasArea and "Accent" or "DimColor",
 			TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1,
@@ -4670,6 +4673,12 @@ function Library:CreatePathEditor(info)
 		end
 		self:Refresh()
 	end
+	function PathEditor:AppendAction()
+		if cb.OnAppendAction then
+			Library:SafeCallback(cb.OnAppendAction)
+		end
+		self:Refresh()
+	end
 	function PathEditor:Save()
 		if not cb.OnSave then
 			return
@@ -4710,6 +4719,11 @@ function Library:CreatePathEditor(info)
 	AddBtn.MouseButton1Click:Connect(function()
 		PathEditor:Append()
 	end)
+	if ActionBtn then
+		ActionBtn.MouseButton1Click:Connect(function()
+			PathEditor:AppendAction()
+		end)
+	end
 	RefreshBtn.MouseButton1Click:Connect(function()
 		PathEditor:Reload()
 	end)
