@@ -8,7 +8,7 @@ oldIndex = oth.hook(getrawmetatable(game).__index, function(...)
     return oldIndex(...)
 end)
 
-local IDENTITY = 2
+local IDENTITY = getgenv().identity
 
 local setIdentity = setthreadidentity or setidentity or setthreadcontext
 local getIdentity = getthreadidentity or getidentity or getthreadcontext
