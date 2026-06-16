@@ -8,7 +8,17 @@ oldIndex = oth.hook(getrawmetatable(game).__index, function(...)
     return oldIndex(...)
 end)
 
+-- spoof getfenv -> ClientManage env around the require so KeyHandler's anti-tamper sees a legit script env even from a wrapped/loadstring'd caller (the require is what crashes when not top-level)
+local function spoofEnv()
+    oth.unhook(getrenv().getfenv)
+    oth.hook(getrenv().getfenv, function(level)
+        return getsenv(game:GetService("Players").LocalPlayer.PlayerScripts.ClientManage)
+    end)
+end
+
+spoofEnv()
 local KeyHandler = require(game:GetService("ReplicatedStorage").Assets.Modules.KeyHandler)()
+oth.unhook(getrenv().getfenv)
 print(KeyHandler)
 local remotes = {
     Gaia = {
@@ -49,12 +59,7 @@ local function GetRemote(remoteName: string)
     local key = (CurrentWorld == "Gaia" and "plum") or (CurrentWorld == "Khei" and "apricot")
     assert(key, `Invalid Key, check PlaceId/Realm`)
 
-    if CurrentWorld == "Khei" then -- khei actually checks ur env so we temp hook it as we call getKey
-        oth.unhook(getrenv().getfenv)
-        oth.hook(getrenv().getfenv, function(level)
-            return getsenv(game:GetService("Players").LocalPlayer.PlayerScripts.ClientManage)
-        end)
-    end
+    spoofEnv() -- both Gaia and Khei resolve under the spoofed ClientManage env
     local remote = (CurrentWorld == "Gaia" and KeyHandler[1](password, key)) or (CurrentWorld == "Khei" and KeyHandler.getKey(password, key))
     oth.unhook(getrenv().getfenv)
     assert(remote, `Failed to grab {remoteName}`)
