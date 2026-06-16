@@ -4183,6 +4183,13 @@ function Library:CreatePathEditor(info)
 		local i = table.find(kindOrder, key) or 0
 		return kindOrder[(i % #kindOrder) + 1]
 	end
+	local function prevKind(key)
+		if #kindOrder == 0 then
+			return key
+		end
+		local i = table.find(kindOrder, key) or 1
+		return kindOrder[((i - 2) % #kindOrder) + 1]
+	end
 	local BASE_TITLE = info.Title
 
 	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(360, 130), info.Title)
@@ -4380,6 +4387,15 @@ function Library:CreatePathEditor(info)
 				btn.Text = tostring(cond[key])
 				PathEditor:SetCondition(index, cond)
 			end)
+			btn.MouseButton2Click:Connect(function()
+				if #options == 0 then
+					return
+				end
+				local at = table.find(options, cond[key]) or 1
+				cond[key] = options[((at - 2) % #options) + 1]
+				btn.Text = tostring(cond[key])
+				PathEditor:SetCondition(index, cond)
+			end)
 			return btn
 		end
 		cycleBtn(condVars, "var", 92)
@@ -4478,6 +4494,9 @@ function Library:CreatePathEditor(info)
 		})
 		TypeBtn.MouseButton1Click:Connect(function()
 			PathEditor:SetKind(index, nextKind(kindKey))
+		end)
+		TypeBtn.MouseButton2Click:Connect(function()
+			PathEditor:SetKind(index, prevKind(kindKey))
 		end)
 		local positional = kindCfg.Positional ~= false
 		New("TextLabel", {
@@ -4602,6 +4621,27 @@ function Library:CreatePathEditor(info)
 		return row
 	end
 
+	-- defer so AutomaticCanvasSize has settled before we read row/canvas extents; index nil means jump to the bottom
+	local function scrollToIndex(index)
+		local function apply()
+			pcall(function()
+				local row = index and PathEditor.Rows[index]
+				if not row then
+					Scroll.CanvasPosition = Vector2.new(0, 1e7)
+					return
+				end
+				local maxScroll = math.max(0, Scroll.AbsoluteCanvasSize.Y - (Scroll.AbsoluteWindowSize or Scroll.AbsoluteSize).Y)
+				local rel = row.AbsolutePosition.Y - Scroll.AbsolutePosition.Y + Scroll.CanvasPosition.Y
+				Scroll.CanvasPosition = Vector2.new(0, math.clamp(rel, 0, maxScroll))
+			end)
+		end
+		if task and task.defer then
+			task.defer(apply)
+		else
+			apply()
+		end
+	end
+
 	function PathEditor:Refresh()
 		for _, r in self.Rows do
 			pcall(function()
@@ -4666,18 +4706,21 @@ function Library:CreatePathEditor(info)
 			Library:SafeCallback(cb.OnInsert, index)
 		end
 		self:Refresh()
+		scrollToIndex(index + 1)
 	end
 	function PathEditor:Append()
 		if cb.OnAppend then
 			Library:SafeCallback(cb.OnAppend)
 		end
 		self:Refresh()
+		scrollToIndex(nil)
 	end
 	function PathEditor:AppendAction()
 		if cb.OnAppendAction then
 			Library:SafeCallback(cb.OnAppendAction)
 		end
 		self:Refresh()
+		scrollToIndex(nil)
 	end
 	function PathEditor:Save()
 		if not cb.OnSave then
