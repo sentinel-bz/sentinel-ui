@@ -18,7 +18,18 @@ do
 			return oldIndex(...)
 		end)
 
+		-- KeyHandler probes call-stack depth with error("",9)/error("",10) and BreakJoints-crashes when required from a wrapped caller (loadstring/module/CharacterAdded); strip position info on empty-message errors so the probe reads "" and the depth gate passes
+		local oldError
+		oldError = oth.hook(error, function(message, level)
+			if message == "" then
+				return oldError("", 0)
+			end
+			return oldError(message, level)
+		end)
+
 		local KeyHandler = require(game:GetService("ReplicatedStorage").Assets.Modules.KeyHandler)()
+
+		oth.unhook(error)
 
 		getgenv().__sentinel_keyhandler = KeyHandler
 		getgenv().__sentinel_world = require(game:GetService("ReplicatedStorage").Info.RealmInfo).CurrentWorld
