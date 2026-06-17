@@ -1,3 +1,7 @@
+--[[
+loadstring(game:HttpGet("https://raw.githubusercontent.com/sentinel-bz/sentinel-ui/refs/heads/main/keyhandler.luau"))()
+--]]
+
 do
 	local oth = oth or {}
 	oth.hook = (oth and oth.hook) or hookfunction
