@@ -4920,10 +4920,21 @@ function Library:CreateAutoBlockBuilder(info)
 		OnSave = onSave, OnDelete = onDelete, OnToggleLog = onToggleLog, OnClearLogs = onClearLogs, OnSelect = onSelect,
 	}
 
-	label(leftBody, "Detected Animations", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 14), "FontColor", Enum.TextXAlignment.Center)
+	local mode = "detected"
+	local detected = {}
+	local savedBlocks = {}
+	local function tabButton(text, pos, size)
+		return New("TextButton", {
+			Parent = leftBody, Text = text, TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1, AutoButtonColor = false,
+			Position = pos, Size = size, TextSize = 12, ZIndex = 7,
+		})
+	end
+	local detTab = tabButton("Detected", UDim2.new(0, 0, 0, 0), UDim2.new(0.5, -1, 0, 15))
+	local savTab = tabButton("Saved", UDim2.new(0.5, 1, 0, 0), UDim2.new(0.5, -1, 0, 15))
 	local logLocalOn = false
-	local logBtn = button(leftBody, "Log LocalPlayer: OFF", UDim2.new(0, 0, 0, 16), UDim2.new(1, 0, 0, 15))
-	local _, _, listBody = MakePanel(leftBody, UDim2.new(1, 0, 1, -52), UDim2.fromOffset(0, 34))
+	local logBtn = button(leftBody, "Log LocalPlayer: OFF", UDim2.new(0, 0, 0, 18), UDim2.new(1, 0, 0, 15))
+	local _, _, listBody = MakePanel(leftBody, UDim2.new(1, 0, 1, -54), UDim2.fromOffset(0, 36))
 	local scroll = New("ScrollingFrame", {
 		Parent = listBody, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.fromOffset(0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -4946,16 +4957,21 @@ function Library:CreateAutoBlockBuilder(info)
 	local durLabel = label(midBody, "", UDim2.new(0, 0, 1, -64), UDim2.new(1, -2, 0, 12), "FontColor", Enum.TextXAlignment.Right)
 	local paused = false
 	local speedPct = 100
-	local currentRig, currentTrack, currentAnimator, currentSound
+	local currentRig, currentTrack, currentAnimator, currentSound, rigSource
 
-	local function ensureRig()
-		if currentRig and currentRig.Parent then
-			return currentAnimator
-		end
+	local function ensureRig(force)
 		local src = LocalPlayer.Character
 		if not src then
-			return nil
+			return currentAnimator
 		end
+		if currentRig and currentRig.Parent and rigSource == src and not force then
+			return currentAnimator
+		end
+		if currentRig then
+			pcall(function() currentRig:Destroy() end)
+		end
+		currentRig, currentTrack, currentAnimator = nil, nil, nil
+		rigSource = src
 		pcall(function()
 			src.Archivable = true
 			for _, d in src:GetDescendants() do
@@ -5021,10 +5037,19 @@ function Library:CreateAutoBlockBuilder(info)
 	local delaySlider = slider(rightBody, "Delay", UDim2.fromOffset(0, 20), 0, 200, 15, 0, "", nil)
 	local holdSlider = slider(rightBody, "Hold", UDim2.fromOffset(0, 38), 0, 500, 50, 0, "", nil)
 	local rangeSlider = slider(rightBody, "Range", UDim2.fromOffset(0, 56), 0, 150, 30, 0, "", nil)
-	local toolBox = input(rightBody, "Tool (not required)", UDim2.fromOffset(0, 76), UDim2.new(1, 0, 0, 15))
-	local enabledChk = checkbox(rightBody, "Enabled", UDim2.fromOffset(0, 96), true, nil)
-	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 116), UDim2.new(1, 0, 0, 15))
-	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 134), UDim2.new(1, 0, 0, 15))
+	local toolBox = input(rightBody, "Tool (equip on block)", UDim2.fromOffset(0, 76), UDim2.new(1, 0, 0, 15))
+	local BLOCK_MODES = { "normal", "vim", "semiblatant" }
+	local BLOCK_MODE_LABEL = { normal = "Normal", vim = "VIM", semiblatant = "Semi-Blatant" }
+	local currentMode = "normal"
+	local modeBtn = button(rightBody, "Block: Normal", UDim2.fromOffset(0, 96), UDim2.new(1, 0, 0, 15))
+	modeBtn.MouseButton1Click:Connect(function()
+		local i = table.find(BLOCK_MODES, currentMode) or 1
+		currentMode = BLOCK_MODES[(i % #BLOCK_MODES) + 1]
+		modeBtn.Text = "Block: " .. BLOCK_MODE_LABEL[currentMode]
+	end)
+	local enabledChk = checkbox(rightBody, "Enabled", UDim2.fromOffset(0, 116), true, nil)
+	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 136), UDim2.new(1, 0, 0, 15))
+	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 154), UDim2.new(1, 0, 0, 15))
 
 	local currentId, currentKind
 
@@ -5070,6 +5095,13 @@ function Library:CreateAutoBlockBuilder(info)
 		end)
 	end
 
+	function ABB:LivePlay(id, name, kind)
+		if paused or kind ~= "anim" then
+			return
+		end
+		ABB:PreviewAnimation(id, name, kind)
+	end
+
 	local function selectSignal(name, id, kind)
 		currentId = id
 		currentKind = kind or "anim"
@@ -5078,13 +5110,7 @@ function Library:CreateAutoBlockBuilder(info)
 		Library:SafeCallback(ABB.OnSelect, id, name, currentKind)
 	end
 
-	local seen = {}
-	function ABB:AddLog(name, id, kind)
-		kind = kind or "anim"
-		local num = tostring(id):match("%d+") or tostring(id)
-		local key = kind .. ":" .. num
-		if seen[key] then return end
-		seen[key] = true
+	local function makeRow(title, subtitle, kind, onClick)
 		local isSound = kind == "sound"
 		local accent = isSound and Color3.fromRGB(120, 225, 140) or Color3.fromRGB(120, 170, 255)
 		local row = New("TextButton", {
@@ -5094,12 +5120,12 @@ function Library:CreateAutoBlockBuilder(info)
 		})
 		New("Frame", { Parent = row, BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.new(0, 3, 1, 0), ZIndex = 8 })
 		New("TextLabel", {
-			Parent = row, Text = name or (isSound and "Sound" or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			Parent = row, Text = title, TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
 			BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 2), Size = UDim2.new(1, -44, 0, 13),
 			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextSize = 12, ZIndex = 8,
 		})
 		New("TextLabel", {
-			Parent = row, Text = num, TextColor3 = "DimColor",
+			Parent = row, Text = subtitle, TextColor3 = "DimColor",
 			BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 15), Size = UDim2.new(1, -13, 0, 11),
 			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextSize = 11, ZIndex = 8,
 		})
@@ -5110,15 +5136,65 @@ function Library:CreateAutoBlockBuilder(info)
 		})
 		row.MouseEnter:Connect(function() row.BackgroundColor3 = Library.Scheme.Pop end)
 		row.MouseLeave:Connect(function() row.BackgroundColor3 = Library.Scheme.Element end)
-		row.MouseButton1Click:Connect(function() selectSignal(name, id, kind) end)
+		row.MouseButton1Click:Connect(onClick)
 	end
-	function ABB:ClearLogs()
-		table.clear(seen)
+	local function clearRows()
 		for _, c in scroll:GetChildren() do
 			if c:IsA("TextButton") then c:Destroy() end
 		end
+	end
+	local function rebuild()
+		clearRows()
+		if mode == "saved" then
+			for _, b in savedBlocks do
+				local num = tostring(b.id):match("%d+") or tostring(b.id)
+				makeRow(b.name or "block", (b.kind == "sound" and "SND " or "ANM ") .. num, b.kind, function()
+					ABB:SetForm(b)
+				end)
+			end
+		else
+			for _, e in detected do
+				makeRow(e.name, tostring(e.id):match("%d+") or tostring(e.id), e.kind, function()
+					selectSignal(e.name, e.id, e.kind)
+				end)
+			end
+		end
+	end
+	local function setMode(m)
+		mode = m
+		detTab.BackgroundColor3 = m == "detected" and Library.Scheme.Pop or Library.Scheme.Element
+		savTab.BackgroundColor3 = m == "saved" and Library.Scheme.Pop or Library.Scheme.Element
+		logBtn.Visible = m == "detected"
+		clearBtn.Visible = m == "detected"
+		rebuild()
+	end
+	detTab.MouseButton1Click:Connect(function() setMode("detected") end)
+	savTab.MouseButton1Click:Connect(function() setMode("saved") end)
+
+	local seen = {}
+	function ABB:AddLog(name, id, kind)
+		kind = kind or "anim"
+		local num = tostring(id):match("%d+") or tostring(id)
+		local key = kind .. ":" .. num
+		if seen[key] then return end
+		seen[key] = true
+		name = name or (kind == "sound" and "Sound" or "Animation")
+		table.insert(detected, { name = name, id = id, kind = kind })
+		if mode == "detected" then
+			makeRow(name, num, kind, function() selectSignal(name, id, kind) end)
+		end
+	end
+	function ABB:ClearLogs()
+		table.clear(seen)
+		table.clear(detected)
+		if mode == "detected" then clearRows() end
 		Library:SafeCallback(ABB.OnClearLogs)
 	end
+	function ABB:SetSavedBlocks(list)
+		savedBlocks = list or {}
+		if mode == "saved" then rebuild() end
+	end
+	setMode("detected")
 
 	local function getForm()
 		return {
@@ -5129,6 +5205,7 @@ function Library:CreateAutoBlockBuilder(info)
 			hold = holdSlider.get(),
 			range = rangeSlider.get(),
 			tool = toolBox.Text,
+			mode = currentMode,
 			enabled = enabledChk.value,
 		}
 	end
@@ -5141,6 +5218,8 @@ function Library:CreateAutoBlockBuilder(info)
 		holdSlider.set(b.hold or 50)
 		rangeSlider.set(b.range or 30)
 		toolBox.Text = b.tool or ""
+		currentMode = b.mode or "normal"
+		modeBtn.Text = "Block: " .. (BLOCK_MODE_LABEL[currentMode] or "Normal")
 		enabledChk.set(b.enabled ~= false)
 		if b.id then ABB:PreviewAnimation(b.id, b.name, currentKind) end
 	end
@@ -5158,7 +5237,7 @@ function Library:CreateAutoBlockBuilder(info)
 
 	function ABB:SetVisible(v)
 		shell.Outline.Visible = v and true or false
-		if v then pcall(ensureRig) end
+		if v then pcall(ensureRig, true) end
 	end
 	function ABB:IsVisible() return shell.Outline.Visible end
 	function ABB:Show() self:SetVisible(true) end
