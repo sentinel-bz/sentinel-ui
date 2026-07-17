@@ -4848,8 +4848,8 @@ function Library:CreateAutoBlockBuilder(info)
 		New("UIPadding", { Parent = box, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 4) })
 		return box
 	end
-	local function checkbox(parent, text, pos, default, onChanged)
-		local holder = New("Frame", { Parent = parent, BackgroundTransparency = 1, Position = pos, Size = UDim2.new(1, 0, 0, 14), ZIndex = 6 })
+	local function checkbox(parent, text, pos, default, onChanged, size)
+		local holder = New("Frame", { Parent = parent, BackgroundTransparency = 1, Position = pos, Size = size or UDim2.new(1, 0, 0, 14), ZIndex = 6 })
 		local box = New("Frame", { Parent = holder, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1, Size = UDim2.fromOffset(12, 12), Position = UDim2.fromOffset(0, 1), ZIndex = 7 })
 		local inner = New("Frame", { Parent = box, BackgroundColor3 = "ElementFill", BorderSizePixel = 0, Size = UDim2.new(1, -2, 1, -2), Position = UDim2.fromOffset(1, 1), ZIndex = 7 })
 		local fill = New("Frame", { Parent = inner, BackgroundColor3 = "Accent", BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Visible = default and true or false, ZIndex = 8 })
@@ -5035,7 +5035,9 @@ function Library:CreateAutoBlockBuilder(info)
 	checkbox(midBody, "Pause", UDim2.new(0, 0, 1, -16), false, function(on)
 		paused = on
 		if currentTrack then pcall(function() currentTrack:AdjustSpeed(on and 0 or speedPct / 100) end) end
-	end)
+	end, UDim2.new(0.5, -2, 0, 14))
+	local resetBtn = button(midBody, "Reset", UDim2.new(0.5, 2, 1, -16), UDim2.new(0.5, -2, 0, 14))
+	resetBtn.MouseButton1Click:Connect(function() pcall(ensureRig, true) end)
 
 	local function updateCamera()
 		local base = currentRig and (currentRig.PrimaryPart or currentRig:FindFirstChild("HumanoidRootPart"))
@@ -5056,6 +5058,9 @@ function Library:CreateAutoBlockBuilder(info)
 		end
 		updateCamera()
 	end))
+	local hovering = false
+	orbitPad.MouseEnter:Connect(function() hovering = true end)
+	orbitPad.MouseLeave:Connect(function() hovering = false end)
 	orbitPad.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
@@ -5070,6 +5075,8 @@ function Library:CreateAutoBlockBuilder(info)
 				orbitPitch = math.clamp(orbitPitch - (pos.Y - lastMouse.Y) * 0.01, -1.4, 1.4)
 			end
 			lastMouse = pos
+		elseif hovering and input.UserInputType == Enum.UserInputType.MouseWheel then
+			orbitDist = math.clamp(orbitDist - input.Position.Z * (orbitDist * 0.12), 2, 300)
 		end
 	end))
 	Library:GiveSignal(UserInputService.InputEnded:Connect(function(input)
@@ -5092,9 +5099,10 @@ function Library:CreateAutoBlockBuilder(info)
 		currentMode = BLOCK_MODES[(i % #BLOCK_MODES) + 1]
 		modeBtn.Text = "Block: " .. BLOCK_MODE_LABEL[currentMode]
 	end)
-	local enabledChk = checkbox(rightBody, "Enabled", UDim2.fromOffset(0, 116), true, nil)
-	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 136), UDim2.new(1, 0, 0, 15))
-	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 154), UDim2.new(1, 0, 0, 15))
+	local manaShieldChk = checkbox(rightBody, "Mana Shield", UDim2.fromOffset(0, 116), false, nil)
+	local enabledChk = checkbox(rightBody, "Enabled", UDim2.fromOffset(0, 136), true, nil)
+	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 156), UDim2.new(1, 0, 0, 15))
+	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 174), UDim2.new(1, 0, 0, 15))
 
 	local currentId, currentKind
 
@@ -5226,7 +5234,13 @@ function Library:CreateAutoBlockBuilder(info)
 		name = name or (kind == "sound" and "Sound" or "Animation")
 		table.insert(detected, { name = name, id = id, kind = kind })
 		if mode == "detected" then
+			local atBottom = (scroll.CanvasPosition.Y + scroll.AbsoluteWindowSize.Y) >= (scroll.AbsoluteCanvasSize.Y - 8)
 			makeRow(name, num, kind, function() selectSignal(name, id, kind) end)
+			if atBottom then
+				task.defer(function()
+					scroll.CanvasPosition = Vector2.new(0, scroll.AbsoluteCanvasSize.Y)
+				end)
+			end
 		end
 	end
 	function ABB:ClearLogs()
@@ -5251,6 +5265,7 @@ function Library:CreateAutoBlockBuilder(info)
 			range = rangeSlider.get(),
 			tool = toolBox.Text,
 			mode = currentMode,
+			manaShield = manaShieldChk.value,
 			enabled = enabledChk.value,
 		}
 	end
@@ -5265,6 +5280,7 @@ function Library:CreateAutoBlockBuilder(info)
 		toolBox.Text = b.tool or ""
 		currentMode = b.mode or "normal"
 		modeBtn.Text = "Block: " .. (BLOCK_MODE_LABEL[currentMode] or "Normal")
+		manaShieldChk.set(b.manaShield == true)
 		enabledChk.set(b.enabled ~= false)
 		if b.id then ABB:PreviewAnimation(b.id, b.name, currentKind) end
 	end
