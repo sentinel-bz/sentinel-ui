@@ -4782,6 +4782,328 @@ function Library:CreatePathEditor(info)
 	return PathEditor
 end
 
+function Library:CreateAutoBlockBuilder(info)
+	info = info or {}
+	local Players = game:GetService("Players")
+	local RunService = game:GetService("RunService")
+	local LocalPlayer = Players.LocalPlayer
+
+	local onSave, onDelete, onToggleLog, onClearLogs, onSelect =
+		info.OnSave, info.OnDelete, info.OnToggleLog, info.OnClearLogs, info.OnSelect
+	info = Library:Validate(info, {
+		Title = "auto block builder",
+		Width = 720,
+		Height = 380,
+		Visible = false,
+	})
+
+	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(300, 120), info.Title)
+	shell.Outline.Visible = info.Visible and true or false
+
+	local Header = New("Frame", { Parent = shell.Body, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), ZIndex = 5 })
+	Library:MakeDraggable(shell.Outline, Header)
+
+	local CloseBtn = New("TextButton", {
+		Parent = shell.Body, Text = "X", TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+		TextSize = 16, BackgroundTransparency = 1, AutoButtonColor = false,
+		AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(16, 16), ZIndex = 8,
+	})
+
+	local content = New("Frame", { Parent = shell.Body, BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 20), Size = UDim2.new(1, 0, 1, -22), ZIndex = 4 })
+
+	local function panelColumn(sizeXScale, posXScale, gapL, gapR)
+		local _, _, body = MakePanel(content, UDim2.new(sizeXScale, gapR, 1, 0), UDim2.new(posXScale, gapL, 0, 0))
+		New("UIPadding", { Parent = body, PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) })
+		return body
+	end
+	local leftBody = panelColumn(0.27, 0, 0, -3)
+	local midBody = panelColumn(0.44, 0.27, 3, -6)
+	local rightBody = panelColumn(0.29, 0.71, 3, -3)
+
+	local function label(parent, text, pos, size, colorKey, align)
+		return New("TextLabel", {
+			Parent = parent, Text = text, TextColor3 = colorKey or "FontColor", BackgroundTransparency = 1,
+			TextStrokeTransparency = 0.5, Position = pos, Size = size, TextSize = 12,
+			TextXAlignment = align or Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6,
+		})
+	end
+	local function button(parent, text, pos, size)
+		local b = New("TextButton", {
+			Parent = parent, Text = text, TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1, AutoButtonColor = false,
+			Position = pos, Size = size, TextSize = 12, ZIndex = 7,
+		})
+		b.MouseEnter:Connect(function() b.BackgroundColor3 = Library.Scheme.Pop end)
+		b.MouseLeave:Connect(function() b.BackgroundColor3 = Library.Scheme.Element end)
+		return b
+	end
+	local function input(parent, placeholder, pos, size)
+		local box = New("TextBox", {
+			Parent = parent, Text = "", PlaceholderText = placeholder, PlaceholderColor3 = Color3.fromRGB(90, 90, 90),
+			TextColor3 = "FontColor", TextStrokeTransparency = 0.5, BackgroundColor3 = "Element", BorderColor3 = "ElementBorder",
+			BorderSizePixel = 1, ClearTextOnFocus = false, Position = pos, Size = size, TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 6,
+		})
+		New("UIPadding", { Parent = box, PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 4) })
+		return box
+	end
+	local function checkbox(parent, text, pos, default, onChanged)
+		local holder = New("Frame", { Parent = parent, BackgroundTransparency = 1, Position = pos, Size = UDim2.new(1, 0, 0, 14), ZIndex = 6 })
+		local box = New("Frame", { Parent = holder, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1, Size = UDim2.fromOffset(12, 12), Position = UDim2.fromOffset(0, 1), ZIndex = 7 })
+		local inner = New("Frame", { Parent = box, BackgroundColor3 = "ElementFill", BorderSizePixel = 0, Size = UDim2.new(1, -2, 1, -2), Position = UDim2.fromOffset(1, 1), ZIndex = 7 })
+		local fill = New("Frame", { Parent = inner, BackgroundColor3 = "Accent", BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Visible = default and true or false, ZIndex = 8 })
+		label(holder, text, UDim2.fromOffset(18, 0), UDim2.new(1, -18, 1, 0))
+		local st = { value = default and true or false }
+		local click = New("TextButton", { Parent = holder, Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 9 })
+		click.MouseButton1Click:Connect(function()
+			st.value = not st.value
+			fill.Visible = st.value
+			if onChanged then onChanged(st.value) end
+		end)
+		function st.set(v)
+			st.value = v and true or false
+			fill.Visible = st.value
+		end
+		return st
+	end
+	local function slider(parent, labelText, pos, min, max, default, rounding, suffix, onChanged)
+		local st = { value = default }
+		local holder = New("Frame", { Parent = parent, BackgroundTransparency = 1, Position = pos, Size = UDim2.new(1, 0, 0, 14), ZIndex = 6 })
+		local lbl = label(holder, "", UDim2.fromOffset(0, 0), UDim2.fromOffset(72, 14))
+		local barOutline = New("Frame", { Parent = holder, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1, Position = UDim2.new(0, 76, 0, 2), Size = UDim2.new(1, -76, 0, 10), ZIndex = 7 })
+		local fill = New("Frame", { Parent = barOutline, BackgroundColor3 = "Accent", BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), ZIndex = 8 })
+		local function roundv(v)
+			if rounding and rounding > 0 then
+				local m = 10 ^ rounding
+				return math.floor(v * m + 0.5) / m
+			end
+			return math.floor(v + 0.5)
+		end
+		local function display()
+			local frac = (max - min) == 0 and 0 or (st.value - min) / (max - min)
+			frac = math.clamp(frac, 0, 1)
+			fill.Size = UDim2.new(frac, 0, 1, 0)
+			lbl.Text = string.format("%s: %s%s", labelText, tostring(st.value), suffix or "")
+		end
+		local function setValue(v, fire)
+			v = math.clamp(roundv(v), min, max)
+			local changed = v ~= st.value
+			st.value = v
+			display()
+			if changed and fire and onChanged then onChanged(v) end
+		end
+		local dragging = false
+		local function moveTo(x)
+			local rel = (x - barOutline.AbsolutePosition.X) / barOutline.AbsoluteSize.X
+			setValue(min + math.clamp(rel, 0, 1) * (max - min), true)
+		end
+		barOutline.InputBegan:Connect(function(i) if IsClickInput(i) then dragging = true moveTo(i.Position.X) end end)
+		barOutline.InputEnded:Connect(function(i) if IsMouseInput(i) then dragging = false end end)
+		Library:GiveSignal(UserInputService.InputChanged:Connect(function(i)
+			if dragging and IsHoverInput(i) then moveTo(i.Position.X) end
+		end))
+		display()
+		function st.set(v) setValue(v, false) end
+		function st.get() return st.value end
+		return st
+	end
+
+	local ResizeHandle = New("Frame", {
+		Parent = shell.Outline, BackgroundColor3 = "Accent", BorderColor3 = "Border",
+		AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -1, 1, -1), Size = UDim2.fromOffset(10, 10), ZIndex = 50, Active = true,
+	})
+	local setSize = Library:MakeResizable(shell.Outline, ResizeHandle, Vector2.new(560, 300), Vector2.new(960, 620))
+
+	local ABB = {
+		Holder = shell.Outline, Header = Header, ResizeHandle = ResizeHandle,
+		OnSave = onSave, OnDelete = onDelete, OnToggleLog = onToggleLog, OnClearLogs = onClearLogs, OnSelect = onSelect,
+	}
+
+	label(leftBody, "Detected Animations", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 14), "FontColor", Enum.TextXAlignment.Center)
+	local logLocalOn = false
+	local logBtn = button(leftBody, "Log LocalPlayer: OFF", UDim2.new(0, 0, 0, 16), UDim2.new(1, 0, 0, 15))
+	local _, _, listBody = MakePanel(leftBody, UDim2.new(1, 0, 1, -52), UDim2.fromOffset(0, 34))
+	local scroll = New("ScrollingFrame", {
+		Parent = listBody, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.fromOffset(0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 3, ScrollBarImageColor3 = "Accent", ZIndex = 6,
+	})
+	New("UIListLayout", { Parent = scroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) })
+	local clearBtn = button(leftBody, "Clear Logs", UDim2.new(0, 0, 1, -15), UDim2.new(1, 0, 0, 15))
+	clearBtn.TextColor3 = Library.Scheme.Red
+
+	local nameLabel = label(midBody, "-", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 14), "FontColor", Enum.TextXAlignment.Center)
+	local idLabel = label(midBody, "", UDim2.fromOffset(0, 15), UDim2.new(1, 0, 0, 12), "DimColor", Enum.TextXAlignment.Center)
+	local viewport = New("ViewportFrame", {
+		Parent = midBody, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1,
+		Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -96), ZIndex = 6,
+	})
+	local world = Instance.new("WorldModel")
+	world.Parent = viewport
+	local vpCam = Instance.new("Camera")
+	vpCam.Parent = viewport
+	viewport.CurrentCamera = vpCam
+	local durLabel = label(midBody, "", UDim2.new(0, 0, 1, -64), UDim2.new(1, -2, 0, 12), "FontColor", Enum.TextXAlignment.Right)
+	local paused = false
+	local speedPct = 100
+	local currentRig, currentTrack, currentAnimator
+	slider(midBody, "Speed %", UDim2.new(0, 0, 1, -50), 0, 300, 100, 0, "", function(v)
+		speedPct = v
+		if currentTrack then pcall(function() currentTrack:AdjustSpeed(paused and 0 or v / 100) end) end
+	end)
+	slider(midBody, "Frame", UDim2.new(0, 0, 1, -34), 0, 100, 0, 0, "", function(v)
+		if currentTrack and currentTrack.Length and currentTrack.Length > 0 then
+			pcall(function()
+				currentTrack.TimePosition = (v / 100) * currentTrack.Length
+				if currentAnimator then currentAnimator:StepAnimations(0) end
+			end)
+		end
+	end)
+	checkbox(midBody, "Pause", UDim2.new(0, 0, 1, -16), false, function(on)
+		paused = on
+		if currentTrack then pcall(function() currentTrack:AdjustSpeed(on and 0 or speedPct / 100) end) end
+	end)
+
+	Library:GiveSignal(RunService.RenderStepped:Connect(function(dt)
+		if currentAnimator and currentTrack and shell.Outline.Visible then
+			pcall(function() currentAnimator:StepAnimations(paused and 0 or dt * (speedPct / 100)) end)
+		end
+	end))
+
+	local nameBox = input(rightBody, "Name", UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 15))
+	local delaySlider = slider(rightBody, "Delay", UDim2.fromOffset(0, 20), 0, 200, 15, 0, "", nil)
+	local holdSlider = slider(rightBody, "Hold", UDim2.fromOffset(0, 38), 0, 500, 50, 0, "", nil)
+	local rangeSlider = slider(rightBody, "Range", UDim2.fromOffset(0, 56), 0, 150, 30, 0, "", nil)
+	local toolBox = input(rightBody, "Tool (not required)", UDim2.fromOffset(0, 76), UDim2.new(1, 0, 0, 15))
+	local enabledChk = checkbox(rightBody, "Enabled", UDim2.fromOffset(0, 96), true, nil)
+	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 116), UDim2.new(1, 0, 0, 15))
+	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 134), UDim2.new(1, 0, 0, 15))
+
+	local currentAnimId
+
+	function ABB:PreviewAnimation(animId, name)
+		nameLabel.Text = name or "-"
+		idLabel.Text = animId or ""
+		durLabel.Text = ""
+		if currentTrack then pcall(function() currentTrack:Stop() end) end
+		if currentRig then pcall(function() currentRig:Destroy() end) end
+		currentRig, currentTrack, currentAnimator = nil, nil, nil
+		if not animId or animId == "" then return end
+		local src = LocalPlayer.Character
+		if not src then return end
+		local ok, rig = pcall(function() return src:Clone() end)
+		if not ok or not rig then return end
+		for _, d in rig:GetDescendants() do
+			if d:IsA("LuaSourceContainer") or d:IsA("Tool") or d:IsA("ForceField") then
+				pcall(function() d:Destroy() end)
+			elseif d:IsA("BasePart") then
+				d.Anchored = false
+			end
+		end
+		local hum = rig:FindFirstChildOfClass("Humanoid")
+		if not hum then
+			pcall(function() rig:Destroy() end)
+			return
+		end
+		local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+		rig.Parent = world
+		currentRig = rig
+		currentAnimator = animator
+		local hrp = rig:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local p = hrp.Position
+			vpCam.CFrame = CFrame.new(p + Vector3.new(0, 1, 8), p + Vector3.new(0, 1, 0))
+		end
+		local anim = Instance.new("Animation")
+		anim.AnimationId = animId
+		local ok2, track = pcall(function() return animator:LoadAnimation(anim) end)
+		if not ok2 or not track then return end
+		currentTrack = track
+		track.Looped = true
+		pcall(function() track:Play() end)
+		pcall(function() track:AdjustSpeed(paused and 0 or speedPct / 100) end)
+		task.spawn(function()
+			for _ = 1, 30 do
+				if track.Length and track.Length > 0 then break end
+				task.wait(0.1)
+			end
+			durLabel.Text = string.format("%.2fs", track.Length or 0)
+		end)
+	end
+
+	local function selectAnimation(name, animId)
+		currentAnimId = animId
+		if nameBox.Text == "" then nameBox.Text = name or "" end
+		ABB:PreviewAnimation(animId, name)
+		Library:SafeCallback(ABB.OnSelect, animId, name)
+	end
+
+	local seen = {}
+	function ABB:AddLog(name, animId)
+		local key = tostring(animId):match("%d+") or tostring(animId)
+		if seen[key] then return end
+		seen[key] = true
+		local row = New("TextButton", {
+			Parent = scroll, Text = " " .. (name or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1, AutoButtonColor = false,
+			Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 12, ZIndex = 7,
+		})
+		row.MouseEnter:Connect(function() row.BackgroundColor3 = Library.Scheme.Pop end)
+		row.MouseLeave:Connect(function() row.BackgroundColor3 = Library.Scheme.Element end)
+		row.MouseButton1Click:Connect(function() selectAnimation(name, animId) end)
+	end
+	function ABB:ClearLogs()
+		table.clear(seen)
+		for _, c in scroll:GetChildren() do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+		Library:SafeCallback(ABB.OnClearLogs)
+	end
+
+	local function getForm()
+		return {
+			name = nameBox.Text,
+			animId = currentAnimId or "",
+			delay = delaySlider.get(),
+			hold = holdSlider.get(),
+			range = rangeSlider.get(),
+			tool = toolBox.Text,
+			enabled = enabledChk.value,
+		}
+	end
+	function ABB:SetForm(b)
+		b = b or {}
+		nameBox.Text = b.name or ""
+		currentAnimId = b.animId
+		delaySlider.set(b.delay or 15)
+		holdSlider.set(b.hold or 50)
+		rangeSlider.set(b.range or 30)
+		toolBox.Text = b.tool or ""
+		enabledChk.set(b.enabled ~= false)
+		if b.animId then ABB:PreviewAnimation(b.animId, b.name) end
+	end
+
+	logBtn.MouseButton1Click:Connect(function()
+		logLocalOn = not logLocalOn
+		logBtn.Text = "Log LocalPlayer: " .. (logLocalOn and "ON" or "OFF")
+		logBtn.TextColor3 = logLocalOn and Color3.fromRGB(120, 255, 120) or Library.Scheme.FontColor
+		Library:SafeCallback(ABB.OnToggleLog, logLocalOn)
+	end)
+	clearBtn.MouseButton1Click:Connect(function() ABB:ClearLogs() end)
+	saveBtn.MouseButton1Click:Connect(function() Library:SafeCallback(ABB.OnSave, getForm()) end)
+	deleteBtn.MouseButton1Click:Connect(function() Library:SafeCallback(ABB.OnDelete, nameBox.Text) end)
+	CloseBtn.MouseButton1Click:Connect(function() ABB:Hide() end)
+
+	function ABB:SetVisible(v) shell.Outline.Visible = v and true or false end
+	function ABB:Show() self:SetVisible(true) end
+	function ABB:Hide() self:SetVisible(false) end
+	function ABB:Toggle() self:SetVisible(not shell.Outline.Visible) end
+	function ABB:Resize(dx, dy) return setSize(shell.Outline.Size.X.Offset + (dx or 0), shell.Outline.Size.Y.Offset + (dy or 0)) end
+
+	Library.AutoBlockBuilder = ABB
+	return ABB
+end
+
 -- standalone auto-sizing draggable status panel; the consumer feeds it text rows
 function Library:CreateStatusList(info)
 	info = Library:Validate(info or {}, {
