@@ -5020,11 +5020,11 @@ function Library:CreateAutoBlockBuilder(info)
 		return currentAnimator
 	end
 
-	slider(midBody, "Speed %", UDim2.new(0, 0, 1, -50), 0, 300, 100, 0, "", function(v)
+	local speedSlider = slider(midBody, "Speed %", UDim2.new(0, 0, 1, -50), 0, 300, 100, 0, "", function(v)
 		speedPct = v
 		if currentTrack then pcall(function() currentTrack:AdjustSpeed(paused and 0 or v / 100) end) end
 	end)
-	slider(midBody, "Frame", UDim2.new(0, 0, 1, -34), 0, 100, 0, 0, "", function(v)
+	local frameSlider = slider(midBody, "Frame", UDim2.new(0, 0, 1, -34), 0, 100, 0, 0, "", function(v)
 		if currentTrack and currentTrack.Length and currentTrack.Length > 0 then
 			pcall(function()
 				currentTrack.TimePosition = (v / 100) * currentTrack.Length
@@ -5037,7 +5037,12 @@ function Library:CreateAutoBlockBuilder(info)
 		if currentTrack then pcall(function() currentTrack:AdjustSpeed(on and 0 or speedPct / 100) end) end
 	end, UDim2.new(0.5, -2, 0, 14))
 	local resetBtn = button(midBody, "Reset", UDim2.new(0.5, 2, 1, -16), UDim2.new(0.5, -2, 0, 14))
-	resetBtn.MouseButton1Click:Connect(function() pcall(ensureRig, true) end)
+	resetBtn.MouseButton1Click:Connect(function()
+		speedPct = 100
+		speedSlider.set(100)
+		frameSlider.set(0)
+		pcall(ensureRig, true)
+	end)
 
 	local function updateCamera()
 		local base = currentRig and (currentRig.PrimaryPart or currentRig:FindFirstChild("HumanoidRootPart"))
@@ -5159,6 +5164,7 @@ function Library:CreateAutoBlockBuilder(info)
 		currentId = id
 		currentKind = kind or "anim"
 		if nameBox.Text == "" then nameBox.Text = name or "" end
+		frameSlider.set(0)
 		ABB:PreviewAnimation(id, name, currentKind)
 		Library:SafeCallback(ABB.OnSelect, id, name, currentKind)
 	end
@@ -5266,6 +5272,7 @@ function Library:CreateAutoBlockBuilder(info)
 			tool = toolBox.Text,
 			mode = currentMode,
 			manaShield = manaShieldChk.value,
+			frame = frameSlider.get(),
 			enabled = enabledChk.value,
 		}
 	end
@@ -5281,6 +5288,7 @@ function Library:CreateAutoBlockBuilder(info)
 		currentMode = b.mode or "normal"
 		modeBtn.Text = "Block: " .. (BLOCK_MODE_LABEL[currentMode] or "Normal")
 		manaShieldChk.set(b.manaShield == true)
+		frameSlider.set(tonumber(b.frame) or 0)
 		enabledChk.set(b.enabled ~= false)
 		if b.id then ABB:PreviewAnimation(b.id, b.name, currentKind) end
 	end
