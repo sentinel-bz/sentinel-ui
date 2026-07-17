@@ -4937,6 +4937,7 @@ function Library:CreateAutoBlockBuilder(info)
 	local viewport = New("ViewportFrame", {
 		Parent = midBody, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1,
 		Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -96), ZIndex = 6,
+		Ambient = Color3.fromRGB(210, 210, 210), LightColor = Color3.fromRGB(255, 255, 255), LightDirection = Vector3.new(-0.5, -1, -0.5),
 	})
 	local world = Instance.new("WorldModel")
 	world.Parent = viewport
@@ -4946,7 +4947,46 @@ function Library:CreateAutoBlockBuilder(info)
 	local durLabel = label(midBody, "", UDim2.new(0, 0, 1, -64), UDim2.new(1, -2, 0, 12), "FontColor", Enum.TextXAlignment.Right)
 	local paused = false
 	local speedPct = 100
-	local currentRig, currentTrack, currentAnimator
+	local currentRig, currentTrack, currentAnimator, currentSound
+
+	local function ensureRig()
+		if currentRig and currentRig.Parent then
+			return currentAnimator
+		end
+		local src = LocalPlayer.Character
+		if not src then
+			return nil
+		end
+		local ok, rig = pcall(function() return src:Clone() end)
+		if not ok or not rig then
+			return nil
+		end
+		for _, d in rig:GetDescendants() do
+			if d:IsA("LuaSourceContainer") or d:IsA("Tool") or d:IsA("ForceField") then
+				pcall(function() d:Destroy() end)
+			end
+		end
+		local hum = rig:FindFirstChildOfClass("Humanoid")
+		local hrp = rig:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			rig.PrimaryPart = hrp
+		end
+		for _, d in rig:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = d == hrp
+			end
+		end
+		rig.Parent = world
+		currentRig = rig
+		currentAnimator = hum and (hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)) or nil
+		pcall(function()
+			local cf, size = rig:GetBoundingBox()
+			local dist = math.max(size.X, size.Y, size.Z) * 1.5 + 3
+			vpCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, 0, dist), cf.Position)
+		end)
+		return currentAnimator
+	end
+
 	slider(midBody, "Speed %", UDim2.new(0, 0, 1, -50), 0, 300, 100, 0, "", function(v)
 		speedPct = v
 		if currentTrack then pcall(function() currentTrack:AdjustSpeed(paused and 0 or v / 100) end) end
@@ -4979,45 +5019,37 @@ function Library:CreateAutoBlockBuilder(info)
 	local saveBtn = button(rightBody, "Save Block", UDim2.fromOffset(0, 116), UDim2.new(1, 0, 0, 15))
 	local deleteBtn = button(rightBody, "Delete Block", UDim2.fromOffset(0, 134), UDim2.new(1, 0, 0, 15))
 
-	local currentAnimId
+	local currentId, currentKind
 
-	function ABB:PreviewAnimation(animId, name)
+	function ABB:PreviewAnimation(id, name, kind)
 		nameLabel.Text = name or "-"
-		idLabel.Text = animId or ""
+		idLabel.Text = id or ""
 		durLabel.Text = ""
-		if currentTrack then pcall(function() currentTrack:Stop() end) end
-		if currentRig then pcall(function() currentRig:Destroy() end) end
-		currentRig, currentTrack, currentAnimator = nil, nil, nil
-		if not animId or animId == "" then return end
-		local src = LocalPlayer.Character
-		if not src then return end
-		local ok, rig = pcall(function() return src:Clone() end)
-		if not ok or not rig then return end
-		for _, d in rig:GetDescendants() do
-			if d:IsA("LuaSourceContainer") or d:IsA("Tool") or d:IsA("ForceField") then
-				pcall(function() d:Destroy() end)
-			elseif d:IsA("BasePart") then
-				d.Anchored = false
-			end
+		if currentTrack then
+			pcall(function() currentTrack:Stop() end)
+			currentTrack = nil
 		end
-		local hum = rig:FindFirstChildOfClass("Humanoid")
-		if not hum then
-			pcall(function() rig:Destroy() end)
+		local animator = ensureRig()
+		if kind == "sound" then
+			pcall(function()
+				if currentSound then currentSound:Destroy() end
+				local s = Instance.new("Sound")
+				s.SoundId = id
+				s.Parent = viewport
+				currentSound = s
+				s:Play()
+			end)
 			return
 		end
-		local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
-		rig.Parent = world
-		currentRig = rig
-		currentAnimator = animator
-		local hrp = rig:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			local p = hrp.Position
-			vpCam.CFrame = CFrame.new(p + Vector3.new(0, 1, 8), p + Vector3.new(0, 1, 0))
+		if not animator or not id or id == "" then
+			return
 		end
 		local anim = Instance.new("Animation")
-		anim.AnimationId = animId
-		local ok2, track = pcall(function() return animator:LoadAnimation(anim) end)
-		if not ok2 or not track then return end
+		anim.AnimationId = id
+		local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
+		if not ok or not track then
+			return
+		end
 		currentTrack = track
 		track.Looped = true
 		pcall(function() track:Play() end)
@@ -5031,26 +5063,29 @@ function Library:CreateAutoBlockBuilder(info)
 		end)
 	end
 
-	local function selectAnimation(name, animId)
-		currentAnimId = animId
+	local function selectSignal(name, id, kind)
+		currentId = id
+		currentKind = kind or "anim"
 		if nameBox.Text == "" then nameBox.Text = name or "" end
-		ABB:PreviewAnimation(animId, name)
-		Library:SafeCallback(ABB.OnSelect, animId, name)
+		ABB:PreviewAnimation(id, name, currentKind)
+		Library:SafeCallback(ABB.OnSelect, id, name, currentKind)
 	end
 
 	local seen = {}
-	function ABB:AddLog(name, animId)
-		local key = tostring(animId):match("%d+") or tostring(animId)
+	function ABB:AddLog(name, id, kind)
+		kind = kind or "anim"
+		local key = kind .. ":" .. (tostring(id):match("%d+") or tostring(id))
 		if seen[key] then return end
 		seen[key] = true
+		local tag = kind == "sound" and "[snd] " or "[anm] "
 		local row = New("TextButton", {
-			Parent = scroll, Text = " " .. (name or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			Parent = scroll, Text = " " .. tag .. (name or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
 			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1, AutoButtonColor = false,
 			Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 12, ZIndex = 7,
 		})
 		row.MouseEnter:Connect(function() row.BackgroundColor3 = Library.Scheme.Pop end)
 		row.MouseLeave:Connect(function() row.BackgroundColor3 = Library.Scheme.Element end)
-		row.MouseButton1Click:Connect(function() selectAnimation(name, animId) end)
+		row.MouseButton1Click:Connect(function() selectSignal(name, id, kind) end)
 	end
 	function ABB:ClearLogs()
 		table.clear(seen)
@@ -5063,7 +5098,8 @@ function Library:CreateAutoBlockBuilder(info)
 	local function getForm()
 		return {
 			name = nameBox.Text,
-			animId = currentAnimId or "",
+			id = currentId or "",
+			kind = currentKind or "anim",
 			delay = delaySlider.get(),
 			hold = holdSlider.get(),
 			range = rangeSlider.get(),
@@ -5074,13 +5110,14 @@ function Library:CreateAutoBlockBuilder(info)
 	function ABB:SetForm(b)
 		b = b or {}
 		nameBox.Text = b.name or ""
-		currentAnimId = b.animId
+		currentId = b.id
+		currentKind = b.kind or "anim"
 		delaySlider.set(b.delay or 15)
 		holdSlider.set(b.hold or 50)
 		rangeSlider.set(b.range or 30)
 		toolBox.Text = b.tool or ""
 		enabledChk.set(b.enabled ~= false)
-		if b.animId then ABB:PreviewAnimation(b.animId, b.name) end
+		if b.id then ABB:PreviewAnimation(b.id, b.name, currentKind) end
 	end
 
 	logBtn.MouseButton1Click:Connect(function()
@@ -5094,7 +5131,11 @@ function Library:CreateAutoBlockBuilder(info)
 	deleteBtn.MouseButton1Click:Connect(function() Library:SafeCallback(ABB.OnDelete, nameBox.Text) end)
 	CloseBtn.MouseButton1Click:Connect(function() ABB:Hide() end)
 
-	function ABB:SetVisible(v) shell.Outline.Visible = v and true or false end
+	function ABB:SetVisible(v)
+		shell.Outline.Visible = v and true or false
+		if v then pcall(ensureRig) end
+	end
+	function ABB:IsVisible() return shell.Outline.Visible end
 	function ABB:Show() self:SetVisible(true) end
 	function ABB:Hide() self:SetVisible(false) end
 	function ABB:Toggle() self:SetVisible(not shell.Outline.Visible) end
