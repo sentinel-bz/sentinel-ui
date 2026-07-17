@@ -4951,9 +4951,17 @@ function Library:CreateAutoBlockBuilder(info)
 		Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -96), ZIndex = 6,
 		Ambient = Color3.fromRGB(210, 210, 210), LightColor = Color3.fromRGB(255, 255, 255), LightDirection = Vector3.new(-0.5, -1, -0.5),
 	})
+	local world = Instance.new("WorldModel")
+	world.Parent = viewport
 	local vpCam = Instance.new("Camera")
 	vpCam.Parent = viewport
 	viewport.CurrentCamera = vpCam
+	local orbitPad = New("TextButton", {
+		Parent = midBody, Text = "", BackgroundTransparency = 1, AutoButtonColor = false,
+		Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -96), ZIndex = 7,
+	})
+	local orbitYaw, orbitPitch, orbitDist = 0, 0, 8
+	local dragging, lastMouse = false, nil
 	local durLabel = label(midBody, "", UDim2.new(0, 0, 1, -64), UDim2.new(1, -2, 0, 12), "FontColor", Enum.TextXAlignment.Right)
 	local paused = false
 	local speedPct = 100
@@ -4996,15 +5004,17 @@ function Library:CreateAutoBlockBuilder(info)
 		if hrp then
 			rig.PrimaryPart = hrp
 		end
-		rig.Parent = viewport
+		rig.Parent = world
 		currentRig = rig
 		currentAnimator = hum and (hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)) or nil
 		pcall(function()
+			local _, size = rig:GetBoundingBox()
+			orbitDist = math.max(size.X, size.Y, size.Z) * 1.4 + 3
 			local base = hrp or rig.PrimaryPart
 			if base then
-				local pos = base.Position
 				local look = base.CFrame.LookVector
-				vpCam.CFrame = CFrame.new(pos + look * 7 + Vector3.new(0, 1.5, 0), pos + Vector3.new(0, 0.5, 0))
+				orbitYaw = math.atan2(look.X, look.Z)
+				orbitPitch = 0
 			end
 		end)
 		return currentAnimator
@@ -5027,9 +5037,44 @@ function Library:CreateAutoBlockBuilder(info)
 		if currentTrack then pcall(function() currentTrack:AdjustSpeed(on and 0 or speedPct / 100) end) end
 	end)
 
+	local function updateCamera()
+		local base = currentRig and (currentRig.PrimaryPart or currentRig:FindFirstChild("HumanoidRootPart"))
+		if not base then
+			return
+		end
+		local center = base.Position + Vector3.new(0, 0.5, 0)
+		local dir = CFrame.fromEulerAnglesYXZ(orbitPitch, orbitYaw, 0) * Vector3.new(0, 0, orbitDist)
+		vpCam.CFrame = CFrame.new(center + dir, center)
+	end
 	Library:GiveSignal(RunService.RenderStepped:Connect(function(dt)
-		if currentAnimator and currentTrack and shell.Outline.Visible then
+		if not shell.Outline.Visible then
+			return
+		end
+		ensureRig()
+		if currentAnimator and currentTrack then
 			pcall(function() currentAnimator:StepAnimations(paused and 0 or dt * (speedPct / 100)) end)
+		end
+		updateCamera()
+	end))
+	orbitPad.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			lastMouse = Vector2.new(input.Position.X, input.Position.Y)
+		end
+	end)
+	Library:GiveSignal(UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local pos = Vector2.new(input.Position.X, input.Position.Y)
+			if lastMouse then
+				orbitYaw -= (pos.X - lastMouse.X) * 0.01
+				orbitPitch = math.clamp(orbitPitch - (pos.Y - lastMouse.Y) * 0.01, -1.4, 1.4)
+			end
+			lastMouse = pos
+		end
+	end))
+	Library:GiveSignal(UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
 		end
 	end))
 
