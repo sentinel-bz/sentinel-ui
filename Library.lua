@@ -4788,8 +4788,8 @@ function Library:CreateAutoBlockBuilder(info)
 	local RunService = game:GetService("RunService")
 	local LocalPlayer = Players.LocalPlayer
 
-	local onSave, onDelete, onToggleLog, onClearLogs, onSelect =
-		info.OnSave, info.OnDelete, info.OnToggleLog, info.OnClearLogs, info.OnSelect
+	local onSave, onDelete, onToggleLog, onClearLogs, onSelect, onVisibleChanged =
+		info.OnSave, info.OnDelete, info.OnToggleLog, info.OnClearLogs, info.OnSelect, info.OnVisibleChanged
 	info = Library:Validate(info, {
 		Title = "auto block builder",
 		Width = 720,
@@ -4918,6 +4918,7 @@ function Library:CreateAutoBlockBuilder(info)
 	local ABB = {
 		Holder = shell.Outline, Header = Header, ResizeHandle = ResizeHandle,
 		OnSave = onSave, OnDelete = onDelete, OnToggleLog = onToggleLog, OnClearLogs = onClearLogs, OnSelect = onSelect,
+		OnVisibleChanged = onVisibleChanged,
 	}
 
 	local mode = "detected"
@@ -4930,11 +4931,57 @@ function Library:CreateAutoBlockBuilder(info)
 			Position = pos, Size = size, TextSize = 12, ZIndex = 7,
 		})
 	end
-	local detTab = tabButton("Detected", UDim2.new(0, 0, 0, 0), UDim2.new(0.5, -1, 0, 15))
-	local savTab = tabButton("Saved", UDim2.new(0.5, 1, 0, 0), UDim2.new(0.5, -1, 0, 15))
+	local filterBox = input(leftBody, "filter player (all)", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 15))
+	function ABB:GetFilter()
+		return filterBox.Text
+	end
+	local suggestFrame = New("Frame", {
+		Parent = leftBody, BackgroundColor3 = "Dark", BorderColor3 = "DarkBorder", BorderSizePixel = 1,
+		Position = UDim2.fromOffset(0, 15), Size = UDim2.new(1, 0, 0, 0), Visible = false, ZIndex = 40,
+	})
+	New("UIListLayout", { Parent = suggestFrame, SortOrder = Enum.SortOrder.LayoutOrder })
+	local function hide_suggest()
+		suggestFrame.Visible = false
+		for _, c in suggestFrame:GetChildren() do
+			if c:IsA("TextButton") then c:Destroy() end
+		end
+	end
+	local function refresh_suggest()
+		hide_suggest()
+		local q = filterBox.Text:lower()
+		if q == "" then return end
+		local shown = 0
+		for _, p in Players:GetPlayers() do
+			if shown >= 5 then break end
+			if p.Name:lower():find(q, 1, true) or p.DisplayName:lower():find(q, 1, true) then
+				shown += 1
+				local pname = p.Name
+				local b = New("TextButton", {
+					Parent = suggestFrame, Text = " " .. p.DisplayName .. " [" .. p.Name .. "]", TextColor3 = "FontColor",
+					TextStrokeTransparency = 0.5, BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1,
+					AutoButtonColor = false, Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 11, ZIndex = 41,
+				})
+				b.MouseButton1Click:Connect(function()
+					filterBox.Text = pname
+					hide_suggest()
+				end)
+			end
+		end
+		if shown > 0 then
+			suggestFrame.Size = UDim2.new(1, 0, 0, shown * 16)
+			suggestFrame.Visible = true
+		end
+	end
+	filterBox:GetPropertyChangedSignal("Text"):Connect(refresh_suggest)
+	filterBox.FocusLost:Connect(function()
+		task.wait(0.15)
+		hide_suggest()
+	end)
+	local detTab = tabButton("Detected", UDim2.new(0, 0, 0, 18), UDim2.new(0.5, -1, 0, 15))
+	local savTab = tabButton("Saved", UDim2.new(0.5, 1, 0, 18), UDim2.new(0.5, -1, 0, 15))
 	local logLocalOn = false
-	local logBtn = button(leftBody, "Log LocalPlayer: OFF", UDim2.new(0, 0, 0, 18), UDim2.new(1, 0, 0, 15))
-	local _, _, listBody = MakePanel(leftBody, UDim2.new(1, 0, 1, -54), UDim2.fromOffset(0, 36))
+	local logBtn = button(leftBody, "Log LocalPlayer: OFF", UDim2.new(0, 0, 0, 36), UDim2.new(1, 0, 0, 15))
+	local _, _, listBody = MakePanel(leftBody, UDim2.new(1, 0, 1, -72), UDim2.fromOffset(0, 54))
 	local scroll = New("ScrollingFrame", {
 		Parent = listBody, BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.fromOffset(0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -5154,15 +5201,17 @@ function Library:CreateAutoBlockBuilder(info)
 	end
 
 	function ABB:LivePlay(id, name, kind)
-		if paused or kind ~= "anim" then
+		if paused or kind ~= "anim" or mode == "saved" then
 			return
 		end
 		ABB:PreviewAnimation(id, name, kind)
 	end
 
+	local editingName
 	local function selectSignal(name, id, kind)
 		currentId = id
 		currentKind = kind or "anim"
+		editingName = nil
 		if nameBox.Text == "" then nameBox.Text = name or "" end
 		frameSlider.set(0)
 		ABB:PreviewAnimation(id, name, currentKind)
@@ -5274,11 +5323,13 @@ function Library:CreateAutoBlockBuilder(info)
 			manaShield = manaShieldChk.value,
 			frame = frameSlider.get(),
 			enabled = enabledChk.value,
+			editing = editingName,
 		}
 	end
 	function ABB:SetForm(b)
 		b = b or {}
 		nameBox.Text = b.name or ""
+		editingName = b.name
 		currentId = b.id
 		currentKind = b.kind or "anim"
 		delaySlider.set(b.delay or 15)
@@ -5307,6 +5358,7 @@ function Library:CreateAutoBlockBuilder(info)
 	function ABB:SetVisible(v)
 		shell.Outline.Visible = v and true or false
 		if v then pcall(ensureRig, true) end
+		Library:SafeCallback(ABB.OnVisibleChanged, shell.Outline.Visible)
 	end
 	function ABB:IsVisible() return shell.Outline.Visible end
 	function ABB:Show() self:SetVisible(true) end
