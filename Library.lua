@@ -4799,6 +4799,7 @@ function Library:CreateAutoBlockBuilder(info)
 
 	local shell = MakeWindowShell(ScreenGui, UDim2.fromOffset(info.Width, info.Height), UDim2.fromOffset(300, 120), info.Title)
 	shell.Outline.Visible = info.Visible and true or false
+	shell.Outline.ZIndex = 0
 
 	local Header = New("Frame", { Parent = shell.Body, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16), ZIndex = 5 })
 	Library:MakeDraggable(shell.Outline, Header)
@@ -4939,8 +4940,6 @@ function Library:CreateAutoBlockBuilder(info)
 		Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -96), ZIndex = 6,
 		Ambient = Color3.fromRGB(210, 210, 210), LightColor = Color3.fromRGB(255, 255, 255), LightDirection = Vector3.new(-0.5, -1, -0.5),
 	})
-	local world = Instance.new("WorldModel")
-	world.Parent = viewport
 	local vpCam = Instance.new("Camera")
 	vpCam.Parent = viewport
 	viewport.CurrentCamera = vpCam
@@ -4957,32 +4956,40 @@ function Library:CreateAutoBlockBuilder(info)
 		if not src then
 			return nil
 		end
+		pcall(function()
+			src.Archivable = true
+			for _, d in src:GetDescendants() do
+				d.Archivable = true
+			end
+		end)
 		local ok, rig = pcall(function() return src:Clone() end)
 		if not ok or not rig then
 			return nil
 		end
+		local hum = rig:FindFirstChildOfClass("Humanoid")
+		local hrp = rig:FindFirstChild("HumanoidRootPart")
 		for _, d in rig:GetDescendants() do
 			if d:IsA("LuaSourceContainer") or d:IsA("Tool") or d:IsA("ForceField") then
 				pcall(function() d:Destroy() end)
+			elseif d:IsA("BasePart") then
+				d.CanCollide = false
+				d.Anchored = d == hrp
+				d.LocalTransparencyModifier = 0
 			end
 		end
-		local hum = rig:FindFirstChildOfClass("Humanoid")
-		local hrp = rig:FindFirstChild("HumanoidRootPart")
 		if hrp then
 			rig.PrimaryPart = hrp
 		end
-		for _, d in rig:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = d == hrp
-			end
-		end
-		rig.Parent = world
+		rig.Parent = viewport
 		currentRig = rig
 		currentAnimator = hum and (hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)) or nil
 		pcall(function()
-			local cf, size = rig:GetBoundingBox()
-			local dist = math.max(size.X, size.Y, size.Z) * 1.5 + 3
-			vpCam.CFrame = CFrame.new(cf.Position + Vector3.new(0, 0, dist), cf.Position)
+			local base = hrp or rig.PrimaryPart
+			if base then
+				local pos = base.Position
+				local look = base.CFrame.LookVector
+				vpCam.CFrame = CFrame.new(pos + look * 7 + Vector3.new(0, 1.5, 0), pos + Vector3.new(0, 0.5, 0))
+			end
 		end)
 		return currentAnimator
 	end
@@ -5074,14 +5081,32 @@ function Library:CreateAutoBlockBuilder(info)
 	local seen = {}
 	function ABB:AddLog(name, id, kind)
 		kind = kind or "anim"
-		local key = kind .. ":" .. (tostring(id):match("%d+") or tostring(id))
+		local num = tostring(id):match("%d+") or tostring(id)
+		local key = kind .. ":" .. num
 		if seen[key] then return end
 		seen[key] = true
-		local tag = kind == "sound" and "[snd] " or "[anm] "
+		local isSound = kind == "sound"
+		local accent = isSound and Color3.fromRGB(120, 225, 140) or Color3.fromRGB(120, 170, 255)
 		local row = New("TextButton", {
-			Parent = scroll, Text = " " .. tag .. (name or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
-			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1, AutoButtonColor = false,
-			Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left, TextSize = 12, ZIndex = 7,
+			Parent = scroll, Text = "", AutoButtonColor = false,
+			BackgroundColor3 = "Element", BorderColor3 = "ElementBorder", BorderSizePixel = 1,
+			Size = UDim2.new(1, 0, 0, 28), ZIndex = 7,
+		})
+		New("Frame", { Parent = row, BackgroundColor3 = accent, BorderSizePixel = 0, Size = UDim2.new(0, 3, 1, 0), ZIndex = 8 })
+		New("TextLabel", {
+			Parent = row, Text = name or (isSound and "Sound" or "Animation"), TextColor3 = "FontColor", TextStrokeTransparency = 0.5,
+			BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 2), Size = UDim2.new(1, -44, 0, 13),
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextSize = 12, ZIndex = 8,
+		})
+		New("TextLabel", {
+			Parent = row, Text = num, TextColor3 = "DimColor",
+			BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 15), Size = UDim2.new(1, -13, 0, 11),
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, TextSize = 11, ZIndex = 8,
+		})
+		New("TextLabel", {
+			Parent = row, Text = isSound and "SND" or "ANM", TextColor3 = accent, BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -5, 0, 2), Size = UDim2.fromOffset(30, 12),
+			TextXAlignment = Enum.TextXAlignment.Right, TextSize = 11, ZIndex = 8,
 		})
 		row.MouseEnter:Connect(function() row.BackgroundColor3 = Library.Scheme.Pop end)
 		row.MouseLeave:Connect(function() row.BackgroundColor3 = Library.Scheme.Element end)
