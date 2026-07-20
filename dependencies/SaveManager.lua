@@ -268,12 +268,17 @@ local SaveManager = {} do
             end)
         end
 
+        local budgetStart = os.clock()
         for _, option in decoded.objects do
             if not option.type then continue end
             if not self.Parser[option.type] then continue end
             if self.Ignore[option.idx] then continue end
 
             task.spawn(self.Parser[option.type].Load, option.idx, option) -- task.spawn() so the config loading wont get stuck.
+            if os.clock() - budgetStart >= 0.008 then -- yield ~every 8ms so a big config applies over a few frames instead of one long freeze
+                task.wait()
+                budgetStart = os.clock()
+            end
         end
 
         return true
