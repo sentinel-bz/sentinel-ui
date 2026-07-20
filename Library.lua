@@ -4071,7 +4071,17 @@ function Library:CreateMacroCreator(info)
 		if self.OnLoad then
 			local seq = self.OnLoad(name)
 			if type(seq) == "table" then
+				-- SetSequence->Clear wipes the name/selection; restore the loaded macro's identity so it shows + Save overwrites it
+				local loaded = NameBox.Text ~= "" and NameBox.Text or name
 				self:SetSequence(seq)
+				if loaded ~= "" then
+					NameBox.Text = loaded
+					selectedName = loaded
+					SavedBtn.Text = loaded
+					if self.OnSelect then
+						Library:SafeCallback(self.OnSelect, loaded)
+					end
+				end
 			end
 		end
 	end
